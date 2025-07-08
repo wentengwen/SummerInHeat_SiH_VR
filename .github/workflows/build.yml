@@ -3,7 +3,7 @@ name: Build and Release UnityVRMod
 on:
   # Run on pushes to the main branch for continuous integration
   push:
-    branches: [ main ]
+    branches: [ main, dev ]
   # Run when a new release is published in GitHub
   release:
     types: [ published ]
