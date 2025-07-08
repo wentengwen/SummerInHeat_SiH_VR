@@ -58,7 +58,7 @@ jobs:
       # This allows for testing and verification without creating a full release.
       - name: Upload Artifacts for CI
         if: github.event_name == 'push'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: UnityVRMod-Builds-${{ env.VERSION }}
           path: UnityVRMod-*.zip

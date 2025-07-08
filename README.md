@@ -1,4 +1,4 @@
-# UnityVRMod (Beta)
+# UnityVRMod
 
 UnityVRMod is a framework I am developing for **injecting a full 6-degrees-of-freedom (6DOF) VR experience** into traditional, non-VR Unity games. It is also designed to be a powerful tool for **extending the functionality of existing native VR games.**
 
