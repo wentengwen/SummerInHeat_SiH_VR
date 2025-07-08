@@ -16,6 +16,8 @@ jobs:
       # Step 1: Check out the repository's code
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
 
       # Step 2: Set up MSBuild
       # This action finds msbuild.exe and adds it to the PATH.
