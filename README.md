@@ -11,7 +11,7 @@ Currently, the mod supports **DirectX 11 on Windows (64-bit)**, with two backend
 
 ## Beta Notice
 
-This is a beta release (`v0.1.0-beta`). While the core VR visualization is stable and performant, many advanced features are still under development. For the best experience, especially for troubleshooting and advanced configuration, I **strongly recommend** using this mod alongside [**UnityExplorer**](https://github.com/sinai-dev/UnityExplorer). UnityExplorer is an invaluable in-game tool for finding camera paths, scene names, and object hierarchies, which is immensely helpful for configuring this mod's advanced override features.
+This is a beta release (`v0.1.0-beta`). While the core VR visualization is stable and performant, many advanced features are still under development. For the best experience, especially for troubleshooting and advanced configuration, I **strongly recommend** using this mod alongside [**UnityExplorer**](https://github.com/yukieiji/UnityExplorer). UnityExplorer is an invaluable in-game tool for finding camera paths, scene names, and object hierarchies, which is immensely helpful for configuring this mod's advanced override features.
 
 ## Installation
 
@@ -101,7 +101,7 @@ These settings only apply if you are using an **OpenVR** build.
 
 * **Multi-Camera Games:**
   * **Issue:** The mod may not display the correct view in games that use multiple active cameras for rendering (e.g., one for the world, one for the character).
-  * **Workaround:** Use [**UnityExplorer**](https://github.com/sinai-dev/UnityExplorer) and enable its **FreeCam** feature. This mod will automatically detect and use the FreeCam as the main camera, providing a complete view.
+  * **Workaround:** Use [**UnityExplorer**](https://github.com/yukieiji/UnityExplorer) and enable its **FreeCam** feature. This mod will automatically detect and use the FreeCam as the main camera, providing a complete view.
 
 * **Scene Transition Issues:**
   * **Issue:** While generally stable, some games may still encounter issues during scene loads.
