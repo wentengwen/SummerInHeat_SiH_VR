@@ -17,15 +17,20 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # Step 2: Run the PowerShell build script
+      # Step 2: Set up MSBuild
+      # This action finds msbuild.exe and adds it to the PATH.
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v1.3.1
+
+      # Step 3: Run the PowerShell build script
       # This script is responsible for building the C++ helper and all C# configurations.
       - name: Run Build Script
         shell: pwsh
         run: ./build.ps1
-        
-      # Step 3: Get the version for naming the artifacts
+
+      # Step 4: Get the version for naming the artifacts
       # This extracts the version from the release tag (e.g., "v0.1.0-beta")
-      # For main branch pushes, it will use the short commit hash as a unique identifier.
+      # For branch pushes, it will use the short commit hash as a unique identifier.
       - name: Get Version Name
         id: get_version
         shell: pwsh
@@ -37,7 +42,7 @@ jobs:
           }
           echo "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV
 
-      # Step 4: Archive each build configuration into a separate .zip file
+      # Step 5: Archive each build configuration into a separate .zip file
       - name: Archive Builds
         shell: pwsh
         run: |
@@ -46,7 +51,7 @@ jobs:
           Compress-Archive -Path Release/OpenVR/UnityVRMod.BepInEx.IL2CPP/* -DestinationPath UnityVRMod-${{ env.VERSION }}-OpenVR-IL2CPP.zip
           Compress-Archive -Path Release/OpenVR/UnityVRMod.BepInEx.Mono/* -DestinationPath UnityVRMod-${{ env.VERSION }}-OpenVR-Mono.zip
           
-      # Step 5: If this is a 'release' event, upload the zipped artifacts to the GitHub Release page
+      # Step 6: If this is a 'release' event, upload the zipped artifacts to the GitHub Release page
       - name: Upload Assets to Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v1
@@ -54,7 +59,7 @@ jobs:
           files: |
             UnityVRMod-*.zip
 
-      # Step 6: If this is just a 'push' to main, upload the zips as temporary build artifacts
+      # Step 7: If this is just a 'push' to main, upload the zips as temporary build artifacts
       # This allows for testing and verification without creating a full release.
       - name: Upload Artifacts for CI
         if: github.event_name == 'push'
