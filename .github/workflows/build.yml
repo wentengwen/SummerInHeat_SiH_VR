@@ -12,6 +12,9 @@ jobs:
   build-and-package:
     runs-on: windows-latest
 
+    permissions:
+      contents: write
+
     steps:
       # Step 1: Check out the repository's code
       - name: Checkout Repository
