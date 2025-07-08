@@ -8,12 +8,11 @@ on:
   release:
     types: [ published ]
 
+permissions:
+  contents: write
 jobs:
   build-and-package:
     runs-on: windows-latest
-
-    permissions:
-      contents: write
 
     steps:
       # Step 1: Check out the repository's code
@@ -59,7 +58,7 @@ jobs:
       # Step 6: If this is a 'release' event, upload the zipped artifacts to the GitHub Release page
       - name: Upload Assets to Release
         if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             UnityVRMod-*.zip
