@@ -1,0 +1,242 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <LangVersion>latest</LangVersion>
+    <WarningLevel>8</WarningLevel>
+    <RootNamespace>UnityVRMod</RootNamespace>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>    
+	<Configurations>BIE_Unity_Mono_OpenVR_Debug;BIE_Unity_Mono_OpenVR_Release;BIE_Unity_Cpp_OpenVR_Debug;BIE_Unity_Cpp_OpenVR_Release;BIE_Unity_Mono_OpenXR_Debug;BIE_Unity_Mono_OpenXR_Release;BIE_Unity_Cpp_OpenXR_Debug;BIE_Unity_Cpp_OpenXR_Release</Configurations>
+    <NoWarn>$(NoWarn);NU1603</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EditorConfigFiles Remove=".editorconfig" Condition="Exists('.editorconfig')" />
+  </ItemGroup>
+
+  <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
+    <Exec Condition="$(DefineConstants.Contains('CPP')) AND $(DefineConstants.Contains('BIE')) AND $(DefineConstants.Contains('INTEROP'))" Command="dotnet build ..\UniverseLib\src\UniverseLib.sln -c Release_IL2CPP_Interop_BIE" />
+    <Exec Condition="$(DefineConstants.Contains('MONO')) AND $(DefineConstants.Contains('BIE'))" Command="dotnet build ..\UniverseLib\src\UniverseLib.sln -c Release_Mono" />
+  </Target>
+
+  <!-- BepInEx Unity MONO - OpenVR - DEBUG -->
+  <PropertyGroup Condition="'$(Configuration)'=='BIE_Unity_Mono_OpenVR_Debug'">
+    <TargetFramework>net46</TargetFramework>
+    <OutputPath>..\Release\OpenVR\UnityVRMod.BepInEx.Mono.Debug\</OutputPath>
+    <DefineConstants>DEBUG,MONO,BIE,ENABLE_VDEBUG_LOGGING,OPENVR_BUILD</DefineConstants>
+    <AssemblyName>UnityVRMod.BepInEx.Mono_OpenVR</AssemblyName>
+    <Optimize>false</Optimize>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>portable</DebugType>
+  </PropertyGroup>
+
+  <!-- BepInEx Unity MONO - OpenVR - RELEASE -->
+  <PropertyGroup Condition="'$(Configuration)'=='BIE_Unity_Mono_OpenVR_Release'">
+    <TargetFramework>net46</TargetFramework>
+    <OutputPath>..\Release\OpenVR\UnityVRMod.BepInEx.Mono\</OutputPath>
+    <DefineConstants>MONO,BIE,OPENVR_BUILD</DefineConstants>
+    <AssemblyName>UnityVRMod.BepInEx.Mono_OpenVR</AssemblyName>
+    <Optimize>true</Optimize>
+    <DebugSymbols>false</DebugSymbols>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <!-- BepInEx Unity IL2CPP - OpenVR - DEBUG -->
+  <PropertyGroup Condition="'$(Configuration)'=='BIE_Unity_Cpp_OpenVR_Debug'">
+    <TargetFramework>net6.0</TargetFramework>
+    <OutputPath>..\Release\OpenVR\UnityVRMod.BepInEx.IL2CPP.Debug\</OutputPath>
+    <DefineConstants>DEBUG,CPP,BIE,INTEROP,ENABLE_VDEBUG_LOGGING,OPENVR_BUILD</DefineConstants>
+    <AssemblyName>UnityVRMod.BepInEx.IL2CPP_OpenVR</AssemblyName>
+    <Optimize>false</Optimize>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>portable</DebugType>
+  </PropertyGroup>
+
+  <!-- BepInEx Unity IL2CPP - OpenVR - RELEASE -->
+  <PropertyGroup Condition="'$(Configuration)'=='BIE_Unity_Cpp_OpenVR_Release'">
+    <TargetFramework>net6.0</TargetFramework>
+    <OutputPath>..\Release\OpenVR\UnityVRMod.BepInEx.IL2CPP\</OutputPath>
+    <DefineConstants>CPP,BIE,INTEROP,OPENVR_BUILD</DefineConstants>
+    <AssemblyName>UnityVRMod.BepInEx.IL2CPP_OpenVR</AssemblyName>
+    <Optimize>true</Optimize>
+    <DebugSymbols>false</DebugSymbols>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+  
+  <!-- BepInEx Unity MONO - OpenXR - DEBUG -->
+  <PropertyGroup Condition="'$(Configuration)'=='BIE_Unity_Mono_OpenXR_Debug'">
+    <TargetFramework>net46</TargetFramework>
+    <OutputPath>..\Release\OpenXR\UnityVRMod.BepInEx.Mono.Debug\</OutputPath>
+    <DefineConstants>DEBUG,MONO,BIE,ENABLE_VDEBUG_LOGGING,OPENXR_BUILD</DefineConstants>
+    <AssemblyName>UnityVRMod.BepInEx.Mono_OpenXR</AssemblyName>
+    <Optimize>false</Optimize>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>portable</DebugType>
+  </PropertyGroup>
+
+  <!-- BepInEx Unity MONO - OpenXR - RELEASE -->
+  <PropertyGroup Condition="'$(Configuration)'=='BIE_Unity_Mono_OpenXR_Release'">
+    <TargetFramework>net46</TargetFramework>
+    <OutputPath>..\Release\OpenXR\UnityVRMod.BepInEx.Mono\</OutputPath>
+    <DefineConstants>MONO,BIE,OPENXR_BUILD</DefineConstants>
+    <AssemblyName>UnityVRMod.BepInEx.Mono_OpenXR</AssemblyName>
+    <Optimize>true</Optimize>
+    <DebugSymbols>false</DebugSymbols>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <!-- BepInEx Unity IL2CPP - OpenXR - DEBUG -->
+  <PropertyGroup Condition="'$(Configuration)'=='BIE_Unity_Cpp_OpenXR_Debug'">
+    <TargetFramework>net6.0</TargetFramework>
+    <OutputPath>..\Release\OpenXR\UnityVRMod.BepInEx.IL2CPP.Debug\</OutputPath>
+    <DefineConstants>DEBUG,CPP,BIE,INTEROP,ENABLE_VDEBUG_LOGGING,OPENXR_BUILD</DefineConstants>
+    <AssemblyName>UnityVRMod.BepInEx.IL2CPP_OpenXR</AssemblyName>
+    <Optimize>false</Optimize>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>portable</DebugType>
+  </PropertyGroup>
+
+  <!-- BepInEx Unity IL2CPP - OpenXR - RELEASE -->
+  <PropertyGroup Condition="'$(Configuration)'=='BIE_Unity_Cpp_OpenXR_Release'">
+    <TargetFramework>net6.0</TargetFramework>
+    <OutputPath>..\Release\OpenXR\UnityVRMod.BepInEx.IL2CPP\</OutputPath>
+    <DefineConstants>CPP,BIE,INTEROP,OPENXR_BUILD</DefineConstants>
+    <AssemblyName>UnityVRMod.BepInEx.IL2CPP_OpenXR</AssemblyName>
+    <Optimize>true</Optimize>
+    <DebugSymbols>false</DebugSymbols>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <!-- Conditional Source File Compilation -->
+  <ItemGroup>
+    <Compile Remove="Features\VRVisualization\VrCameraSetup_CoreOpenVR.cs" />
+    <Compile Remove="Features\VRVisualization\OpenVR\OpenVR.cs" /> 
+    <Compile Remove="Features\VRVisualization\VrCameraSetup_CoreOpenXR.cs" />
+    <Compile Remove="Features\VRVisualization\OpenXR\OpenXR.cs" /> 
+    <Compile Remove="Features\VRVisualization\OpenXR\NativeBridge.cs" /> 
+
+    <Compile Include="Features\VRVisualization\VrCameraSetup_CoreOpenVR.cs" Condition="$(DefineConstants.Contains('OPENVR_BUILD'))" />
+    <Compile Include="Features\VRVisualization\OpenVR\OpenVR.cs" Condition="$(DefineConstants.Contains('OPENVR_BUILD'))" />
+
+    <Compile Include="Features\VRVisualization\VrCameraSetup_CoreOpenXR.cs" Condition="$(DefineConstants.Contains('OPENXR_BUILD'))" />
+    <Compile Include="Features\VRVisualization\OpenXR\OpenXR.cs" Condition="$(DefineConstants.Contains('OPENXR_BUILD'))" />
+    <Compile Include="Features\VRVisualization\OpenXR\NativeBridge.cs" Condition="$(DefineConstants.Contains('OPENXR_BUILD'))" />
+  </ItemGroup>
+
+  <!-- il2cpp Interop nuget -->
+  <ItemGroup Condition="$(DefineConstants.Contains('INTEROP'))">
+    <PackageReference Include="Il2CppInterop.Common" Version="1.4.5" />
+    <PackageReference Include="Il2CppInterop.Runtime" Version="1.4.5" />
+  </ItemGroup>
+
+  <!-- BIE il2cpp Interop UniverseLib -->
+  <ItemGroup Condition="$(DefineConstants.Contains('INTEROP')) AND $(DefineConstants.Contains('BIE'))">
+    <Reference Include="UniverseLib">
+      <HintPath>..\UniverseLib\Release\UniverseLib.Il2Cpp.Interop\UniverseLib.BIE.IL2CPP.Interop.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+  </ItemGroup>
+  
+  <!-- mono UniverseLib -->
+  <ItemGroup Condition="$(DefineConstants.Contains('MONO'))">
+    <Reference Include="UniverseLib">
+      <HintPath>..\UniverseLib\Release\UniverseLib.Mono\UniverseLib.Mono.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- ~~~~~ ASSEMBLY REFERENCES ~~~~~ -->
+
+  <!-- BepInEx 6 Unity Mono References -->
+  <ItemGroup Condition="$(DefineConstants.Contains('MONO')) AND $(DefineConstants.Contains('BIE'))">
+    <Reference Include="BepInEx.Core">
+		<HintPath>..\lib\mono\BepInEx\BepInEx.Core.dll</HintPath>
+		<Private>False</Private>
+	</Reference>
+	<Reference Include="BepInEx.Unity.Mono">
+		<HintPath>..\lib\mono\BepInEx\BepInEx.Unity.Mono.dll</HintPath>
+		<Private>False</Private>
+	</Reference>
+	<Reference Include="UnityEngine">
+		<HintPath>..\lib\mono\UnityEngine.dll</HintPath>
+		<Private>False</Private>
+	</Reference>
+	<Reference Include="UnityEngine.UI">
+		<HintPath>..\lib\mono\UnityEngine.UI.dll</HintPath>
+		<Private>False</Private>
+	</Reference>
+	<Reference Include="UnityEngine.CoreModule">
+		<HintPath>..\lib\mono\UnityEngine.CoreModule.dll</HintPath> 
+		<Private>False</Private>
+	</Reference>
+	<Reference Include="UnityEngine.AudioModule">
+		<HintPath>..\lib\mono\UnityEngine.AudioModule.dll</HintPath> 
+		<Private>False</Private>
+	</Reference>
+  </ItemGroup>
+
+  <!-- BepInEx 6 Unity IL2CPP References -->
+  <ItemGroup Condition="$(DefineConstants.Contains('CPP')) AND $(DefineConstants.Contains('BIE')) AND $(DefineConstants.Contains('INTEROP'))">
+    <Reference Include="BepInEx.Core">
+      <HintPath>..\lib\cpp\BepInEx\BepInEx.Core.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="BepInEx.Unity.IL2CPP">
+      <HintPath>..\lib\cpp\BepInEx\BepInEx.Unity.IL2CPP.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>..\lib\cpp\UnityEngine.CoreModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AudioModule">
+      <HintPath>..\lib\cpp\UnityEngine.AudioModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>..\lib\cpp\UnityEngine.UI.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>..\lib\cpp\UnityEngine.UIModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+        <HintPath>..\lib\cpp\UnityEngine.IMGUIModule.dll</HintPath>
+        <Private>False</Private>
+    </Reference>
+    <Reference Include="Il2Cppmscorlib">
+      <HintPath>..\lib\cpp\Il2Cppmscorlib.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Runtime">
+      <HintPath>..\lib\cpp\Il2CppInterop.Runtime.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+  
+  <!-- OpenVR API Native DLL (Conditional Copy to Output) -->
+  <ItemGroup Condition="$(DefineConstants.Contains('OPENVR_BUILD'))">
+    <None Include="..\lib\openvr_api.dll">
+      <Link>openvr_api.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  
+  <!-- OpenXR Native DLL (Conditional Copy to Output) -->
+  <ItemGroup Condition="$(DefineConstants.Contains('OPENXR_BUILD'))">
+    <None Include="..\lib\openxr_loader.dll">
+      <Link>openxr_loader.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+	<None Include="..\lib\UnityGraphicsHelper.dll">
+      <Link>UnityGraphicsHelper.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
