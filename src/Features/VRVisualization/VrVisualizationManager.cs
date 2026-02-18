@@ -23,6 +23,12 @@ namespace UnityVRMod.Features.VrVisualization
 
         private bool _hasVrBeenAttemptedByUser = false;
         internal bool IsVrReady => _hasVrBeenAttemptedByUser && _cameraSetup != null && _cameraSetup.IsVrAvailable;
+        private float _nextCameraJudgeLogTime;
+        private string _lastCameraJudgeSignature = string.Empty;
+        private const float CameraJudgeLogIntervalSeconds = 1.0f;
+        private readonly HashSet<string> _disableRigSceneNames = new(StringComparer.OrdinalIgnoreCase);
+        private string _cachedDisableRigScenesRaw = string.Empty;
+        private string _lastSkipRigLogScene = string.Empty;
 
         internal Camera VrCameraForUIParenting
         {
@@ -126,6 +132,9 @@ namespace UnityVRMod.Features.VrVisualization
         {
             VRModCore.LogRuntimeDebug($"Scene changed from '{current.name}' to '{next.name}'.");
             CameraFinder.InvalidateCache(); // Invalidate cache on scene change.
+            _lastCameraJudgeSignature = string.Empty;
+            _nextCameraJudgeLogTime = 0f;
+            _lastSkipRigLogScene = string.Empty;
             if (!IsVrReady) return;
 
             if (ConfigManager.EnableAutomaticSafeMode.Value)
@@ -211,6 +220,28 @@ namespace UnityVRMod.Features.VrVisualization
 
             VrCameraRig vrCameras = _cameraSetup.GetVrCameraGameObjects();
             bool rigIsSetUp = vrCameras.LeftEye != null || vrCameras.RightEye != null;
+            string activeSceneName = SceneManager.GetActiveScene().name;
+
+            if (ShouldSkipRigForScene(activeSceneName))
+            {
+                if (!string.Equals(_lastSkipRigLogScene, activeSceneName, StringComparison.Ordinal))
+                {
+                    VRModCore.Log($"Skipping VR rig setup in scene '{activeSceneName}' (Disable VR Rig Scenes config).");
+                    _lastSkipRigLogScene = activeSceneName;
+                }
+
+                if (rigIsSetUp)
+                {
+                    _cameraSetup.TeardownCameraRig();
+                    _currentlyTrackedOriginalCameraGO = null;
+                    CameraFinder.InvalidateCache();
+                }
+
+                return;
+            }
+
+            _lastSkipRigLogScene = string.Empty;
+            LogCameraJudgeIfNeeded();
 
             Camera mainCam = CameraFinder.FindGameCamera();
 
@@ -252,6 +283,39 @@ namespace UnityVRMod.Features.VrVisualization
             }
         }
 
+        private void RefreshDisableRigScenesCacheIfNeeded()
+        {
+            string raw = ConfigManager.DisableVrRigScenes?.Value ?? string.Empty;
+            if (string.Equals(raw, _cachedDisableRigScenesRaw, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _cachedDisableRigScenesRaw = raw;
+            _disableRigSceneNames.Clear();
+
+            string[] tokens = raw.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string token in tokens)
+            {
+                string sceneName = token.Trim();
+                if (sceneName.Length > 0)
+                {
+                    _disableRigSceneNames.Add(sceneName);
+                }
+            }
+        }
+
+        private bool ShouldSkipRigForScene(string sceneName)
+        {
+            if (string.IsNullOrEmpty(sceneName))
+            {
+                return false;
+            }
+
+            RefreshDisableRigScenesCacheIfNeeded();
+            return _disableRigSceneNames.Contains(sceneName);
+        }
+
         internal void Shutdown()
         {
             VRModCore.LogRuntimeDebug("Shutdown called.");
@@ -265,6 +329,9 @@ namespace UnityVRMod.Features.VrVisualization
                 VRModCore.LogRuntimeDebug($"Shutting down camera setup: {_cameraSetup.GetType().Name}.");
                 _cameraSetup.TeardownVr();
             }
+            _lastCameraJudgeSignature = string.Empty;
+            _nextCameraJudgeLogTime = 0f;
+            _lastSkipRigLogScene = string.Empty;
             _managerInitialized = false;
         }
 
@@ -287,6 +354,33 @@ namespace UnityVRMod.Features.VrVisualization
         public void LiveUpdateUserEyeHeightOffset(float newOffset)
         {
             if (IsVrReady) _cameraSetup.SetUserEyeHeightOffset(newOffset);
+        }
+
+        private void LogCameraJudgeIfNeeded()
+        {
+            if (!(ConfigManager.EnableRuntimeDebugLogging?.Value ?? false)) return;
+            if (Time.time < _nextCameraJudgeLogTime) return;
+            _nextCameraJudgeLogTime = Time.time + CameraJudgeLogIntervalSeconds;
+
+            string signature = CameraJudge.BuildStateSignature();
+            if (string.Equals(signature, _lastCameraJudgeSignature, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _lastCameraJudgeSignature = signature;
+            VRModCore.Log(CameraJudge.BuildDebugSummary());
+
+            Camera mainCameraForHierarchy = null;
+            if (_currentlyTrackedOriginalCameraGO != null)
+            {
+                mainCameraForHierarchy = _currentlyTrackedOriginalCameraGO.GetComponent<Camera>();
+            }
+            if (mainCameraForHierarchy == null)
+            {
+                mainCameraForHierarchy = Camera.main;
+            }
+            VRModCore.Log(CameraJudge.BuildMainCameraHierarchyDebugSummary(mainCameraForHierarchy));
         }
     }
 }

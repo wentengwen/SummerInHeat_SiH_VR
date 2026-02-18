@@ -7,6 +7,26 @@ param (
 	[switch]$DebugHelper
 )
 
+function Resolve-MsBuildPath {
+    $msbuildCmd = Get-Command msbuild -ErrorAction SilentlyContinue
+    if ($msbuildCmd) {
+        return $msbuildCmd.Source
+    }
+
+    $vswherePath = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+    if (Test-Path $vswherePath) {
+        $vsInstallPath = & $vswherePath -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
+        if (-not [string]::IsNullOrWhiteSpace($vsInstallPath)) {
+            $candidate = Join-Path $vsInstallPath "MSBuild\Current\Bin\MSBuild.exe"
+            if (Test-Path $candidate) {
+                return $candidate
+            }
+        }
+    }
+
+    return $null
+}
+
 # --- Configuration ---
 $YourModName = "UnityVRMod"
 $SolutionFile = "src/UnityVRMod.sln" 
@@ -15,6 +35,19 @@ $NativeHelperProjectSolution = "UnityGraphicsHelper/UnityGraphicsHelper.sln"
 $NativeHelperDllBuildOutputBase = "UnityGraphicsHelper/x64"
 $NativeHelperDllName = "UnityGraphicsHelper.dll"
 $LibDir = "lib"
+
+# --- Tooling checks ---
+if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
+    Write-Error "dotnet SDK not found. Please install .NET SDK 8+ and retry."
+    exit 1
+}
+
+$MsBuildExe = Resolve-MsBuildPath
+if ([string]::IsNullOrWhiteSpace($MsBuildExe)) {
+    Write-Error "MSBuild not found. Install Visual Studio 2022 Build Tools with MSBuild and C++ toolset (v143), or run this script from Developer PowerShell for VS."
+    exit 1
+}
+Write-Host "Using MSBuild: $MsBuildExe"
 
 # --- Define UniverseLib output paths ---
 $UniverseLibMonoDllPath = "UniverseLib/Release/UniverseLib.Mono/UniverseLib.Mono.dll"
@@ -38,7 +71,7 @@ if (Test-Path $NativeHelperProjectSolution) {
     $CppBuildConfig = if ($DebugHelper.IsPresent) { "Debug" } else { "Release" } 
 	Write-Host " Building $NativeHelperDllName with Configuration: $CppBuildConfig" 
 	
-	msbuild $NativeHelperProjectSolution /p:Configuration=$CppBuildConfig /p:Platform=x64 /t:Build 
+	& $MsBuildExe $NativeHelperProjectSolution /p:Configuration=$CppBuildConfig /p:Platform=x64 /t:Build 
     
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Native C++ Helper DLL build FAILED for configuration '$CppBuildConfig'. Aborting."
@@ -137,12 +170,20 @@ foreach ($currentTargetDef in $targetsToBuildActual) {
     $FinalPluginSubDir = Join-Path $CurrentOutputPath "plugins\$YourModName" 
     New-Item -Path $FinalPluginSubDir -ItemType Directory -Force | Out-Null
 
-    Move-Item -Path $OutputDllPath -Destination (Join-Path $FinalPluginSubDir "$YourModName.dll") -Force
-    Copy-Item $currentTargetDef.UniverseLibDllPath -Destination $FinalPluginSubDir -Force
-    
-    if ($currentTargetDef.VrBackend -eq "OpenVR") {
-        Copy-Item (Join-Path $LibDir "openvr_api.dll") -Destination $FinalPluginSubDir -Force
-    } elseif ($currentTargetDef.VrBackend -eq "OpenXR") {
+     Move-Item -Path $OutputDllPath -Destination (Join-Path $FinalPluginSubDir "$YourModName.dll") -Force
+     Copy-Item $currentTargetDef.UniverseLibDllPath -Destination $FinalPluginSubDir -Force
+     
+     $ModelSourceDir = "src/Model"
+     if (Test-Path $ModelSourceDir) {
+         $ModelDestDir = Join-Path $FinalPluginSubDir "Model"
+         New-Item -Path $ModelDestDir -ItemType Directory -Force | Out-Null
+         Copy-Item (Join-Path $ModelSourceDir "*") -Destination $ModelDestDir -Recurse -Force
+         Write-Host "  Copied model assets to: $ModelDestDir"
+     }
+     
+     if ($currentTargetDef.VrBackend -eq "OpenVR") {
+         Copy-Item (Join-Path $LibDir "openvr_api.dll") -Destination $FinalPluginSubDir -Force
+     } elseif ($currentTargetDef.VrBackend -eq "OpenXR") {
         Copy-Item (Join-Path $LibDir "openxr_loader.dll") -Destination $FinalPluginSubDir -Force
         Copy-Item (Join-Path $LibDir $NativeHelperDllName) -Destination $FinalPluginSubDir -Force
     }

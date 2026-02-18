@@ -24,11 +24,26 @@ namespace UnityVRMod.Config
         public static ConfigElement<float> VrWorldScale;
         public static ConfigElement<float> VrUserEyeHeightOffset;
         public static ConfigElement<string> ScenePoseOverrides;
+        public static ConfigElement<string> DisableVrRigScenes;
 
         // --- Backend-Specific Stability Settings ---
 #if OPENVR_BUILD
         public static ConfigElement<int> OpenVR_WaitGetPosesDelayMs;
         public static ConfigElement<int> OpenVR_MaxRenderTargetDimension;
+        public static ConfigElement<float> OpenVR_InitialEyeHeightAboveGroundMeters;
+        public static ConfigElement<float> OpenVR_GripDragSensitivity;
+        public static ConfigElement<float> OpenVR_UiPanelScale;
+        public static ConfigElement<bool> OpenVR_UseMouseInjectionForUi;
+        public static ConfigElement<bool> OpenVR_DisableOriginalSceneCameras;
+        public static ConfigElement<bool> OpenVR_MapRightMenuButtonToSpace;
+#endif
+#if OPENXR_BUILD
+        public static ConfigElement<float> OpenXR_GripDragSensitivity;
+        public static ConfigElement<float> OpenXR_UiPanelScale;
+        public static ConfigElement<float> OpenXR_PanelResizeSensitivity;
+        public static ConfigElement<float> OpenXR_SnapTurnDegrees;
+        public static ConfigElement<float> OpenXR_SmoothTurnDegreesPerSecond;
+        public static ConfigElement<bool> OpenXR_EnablePerfLogging;
 #endif
 
         // --- General Settings ---
@@ -110,6 +125,10 @@ namespace UnityVRMod.Config
 
             ScenePoseOverrides = new ConfigElement<string>("Scene-Specific Pose Overrides",
                 "Defines a starting position and, optionally, rotation for the VR rig in specific scenes. Format: 'SceneName|X Y Z|Pitch Yaw Roll;'. Use '~' to keep a game's original value for any axis.", "");
+
+            DisableVrRigScenes = new ConfigElement<string>("Disable VR Rig Scenes",
+                "Skips VR rig creation in specific scenes. Format: 'SceneNameA;SceneNameB;'. Matching is done against SceneManager.GetActiveScene().name.",
+                "");
             
             // --- Backend-Specific Stability Settings ---
 #if OPENVR_BUILD
@@ -118,6 +137,43 @@ namespace UnityVRMod.Config
 
             OpenVR_MaxRenderTargetDimension = new ConfigElement<int>("OpenVR Max Render Target Dimension",
                 "[OpenVR ONLY] The maximum width or height for the VR eye textures. 0 uses the default recommended by SteamVR.", 0);
+
+            OpenVR_InitialEyeHeightAboveGroundMeters = new ConfigElement<float>("OpenVR Initial Eye Height Above Ground (m)",
+                "[OpenVR ONLY] On first valid ground detection, align headset height to GroundY + this value (meters).", 1.65f);
+
+            OpenVR_GripDragSensitivity = new ConfigElement<float>("OpenVR Grip Drag Sensitivity",
+                "[OpenVR ONLY] Multiplier for Grip drag translation. Lower values reduce motion intensity and nausea.", 0.45f);
+
+            OpenVR_UiPanelScale = new ConfigElement<float>("OpenVR UI Panel Scale",
+                "[OpenVR ONLY] Scale multiplier for the projected NGUI panel. 1.0 = default size.", 1.0f);
+
+            OpenVR_UseMouseInjectionForUi = new ConfigElement<bool>("OpenVR Use Mouse Injection For UI",
+                "[OpenVR ONLY] If true, UI clicks use OS-level mouse cursor injection instead of NGUI OnPress/OnClick messages.", true);
+
+            OpenVR_DisableOriginalSceneCameras = new ConfigElement<bool>("OpenVR Disable Original Scene Cameras",
+                "[OpenVR ONLY] If true, disables non-UI original scene cameras while VR rig is active to reduce CPU/GPU cost. VR eye cameras and NGUI UICamera stay active.", true);
+
+            OpenVR_MapRightMenuButtonToSpace = new ConfigElement<bool>("OpenVR Map Right Menu Button To Space",
+                "[OpenVR ONLY] If true, right controller Menu/B is injected as keyboard Space down/up. Useful for hold actions implemented via Input.GetKey(KeyCode.Space).", true);
+#endif
+#if OPENXR_BUILD
+            OpenXR_GripDragSensitivity = new ConfigElement<float>("OpenXR Grip Drag Sensitivity",
+                "[OpenXR ONLY] Multiplier for Grip drag translation. Lower values reduce motion intensity and nausea.", 0.45f);
+
+            OpenXR_UiPanelScale = new ConfigElement<float>("OpenXR UI Panel Scale",
+                "[OpenXR ONLY] Scale multiplier for the projected NGUI panel. 1.0 = default size.", 1.0f);
+
+            OpenXR_PanelResizeSensitivity = new ConfigElement<float>("OpenXR Panel Resize Sensitivity",
+                "[OpenXR ONLY] Multiplier for corner-handle panel resize responsiveness. 1.0 = linear; 2.0 = stronger resize.", 2.0f);
+
+            OpenXR_SnapTurnDegrees = new ConfigElement<float>("OpenXR Snap Turn Degrees",
+                "[OpenXR ONLY] Degrees rotated per snap turn when the stick is flicked left/right.", 30.0f);
+
+            OpenXR_SmoothTurnDegreesPerSecond = new ConfigElement<float>("OpenXR Smooth Turn Speed (deg/s)",
+                "[OpenXR ONLY] Degrees per second used for gentle hold smooth turning with the stick.", 45.0f);
+
+            OpenXR_EnablePerfLogging = new ConfigElement<bool>("OpenXR Enable Perf Logging",
+                "[OpenXR ONLY] Enables periodic [Perf][OpenXR] timing logs for diagnosis.", false);
 #endif
 
             // --- General Settings ---

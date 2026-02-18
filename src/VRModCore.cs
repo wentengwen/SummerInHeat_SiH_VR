@@ -2,6 +2,7 @@
 using System.Runtime.CompilerServices;
 using UnityVRMod.Config;
 using UnityVRMod.Features.Debug;
+using UnityVRMod.Features.Samples;
 using UnityVRMod.Loader;
 
 #pragma warning disable IDE0130
@@ -43,6 +44,7 @@ namespace UnityVRMod.Core
             Universe.Init(ConfigManager.Startup_Delay_Time?.Value ?? 1.0f, LateInit, UniverseLib_Log, universeConfig);
 
             TemporaryLiveReloadTester.Initialize();
+            HelloWorldFeature.Initialize();
             VRModBehaviour.Setup();
             LogRuntimeDebug("Core VRModCore.Init phase complete.");
         }
@@ -78,6 +80,7 @@ namespace UnityVRMod.Core
                 VRModKeybind.Update();
                 VrVisualizationFeature?.Update();
                 TemporaryLiveReloadTester.Update();
+                HelloWorldFeature.Update();
             }
             catch (Exception ex)
             {

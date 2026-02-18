@@ -66,7 +66,6 @@ namespace UnityVRMod.Features.Debug
             if (Time.time > _messageClearTime && !string.IsNullOrEmpty(_displayMessage))
             {
                 _displayMessage = "";
-                if (_selectedSettingIndex != -1) DisplaySelectedSetting();
             }
 
             if (InputManager.GetKeyDown(TEST_API_KEY))
