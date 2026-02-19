@@ -101,6 +101,9 @@ namespace UnityVRMod.Features.VrVisualization
         private ulong _thumbstickClickAction = OpenXRConstants.XR_NULL_HANDLE;
         private ulong _aClickAction = OpenXRConstants.XR_NULL_HANDLE;
         private ulong _bClickAction = OpenXRConstants.XR_NULL_HANDLE;
+        private ulong _yClickAction = OpenXRConstants.XR_NULL_HANDLE;
+        private ulong _leftAimPoseAction = OpenXRConstants.XR_NULL_HANDLE;
+        private ulong _leftAimSpace = OpenXRConstants.XR_NULL_HANDLE;
         private ulong _rightAimPoseAction = OpenXRConstants.XR_NULL_HANDLE;
         private ulong _rightAimSpace = OpenXRConstants.XR_NULL_HANDLE;
         private ulong _leftGripPoseAction = OpenXRConstants.XR_NULL_HANDLE;
@@ -117,6 +120,7 @@ namespace UnityVRMod.Features.VrVisualization
         private OpenXrVector2LogState _rightThumbstickAxisLogState;
         private OpenXrBooleanLogState _leftThumbstickClickLogState;
         private OpenXrBooleanLogState _rightThumbstickClickLogState;
+        private OpenXrBooleanLogState _leftYLogState;
         private OpenXrBooleanLogState _rightALogState;
         private OpenXrBooleanLogState _rightBLogState;
         private bool _inputSyncErrorLogged;
@@ -127,6 +131,7 @@ namespace UnityVRMod.Features.VrVisualization
         private const float TeleportAimStickPressThreshold = 0.60f;
         private const float TeleportAimStickReleaseThreshold = 0.45f;
         private const float GripHoldThreshold = 0.65f;
+        private bool _leftAimPoseErrorLogged;
         private bool _rightAimPoseErrorLogged;
         private bool _leftGripPoseErrorLogged;
         private bool _rightGripPoseErrorLogged;
@@ -347,6 +352,8 @@ namespace UnityVRMod.Features.VrVisualization
                 _thumbstickClickAction = CreateAction("thumbstick_click", "Thumbstick Click", XrActionType.XR_ACTION_TYPE_BOOLEAN_INPUT, pSubactionPaths, 2);
                 _aClickAction = CreateAction("a_click", "A Click", XrActionType.XR_ACTION_TYPE_BOOLEAN_INPUT, pRightSubactionPath, 1);
                 _bClickAction = CreateAction("b_click", "B Click", XrActionType.XR_ACTION_TYPE_BOOLEAN_INPUT, pRightSubactionPath, 1);
+                _yClickAction = CreateAction("y_click", "Y Click", XrActionType.XR_ACTION_TYPE_BOOLEAN_INPUT, pLeftSubactionPath, 1);
+                _leftAimPoseAction = CreateAction("left_aim_pose", "Left Aim Pose", XrActionType.XR_ACTION_TYPE_POSE_INPUT, pLeftSubactionPath, 1);
                 _leftGripPoseAction = CreateAction("left_grip_pose", "Left Grip Pose", XrActionType.XR_ACTION_TYPE_POSE_INPUT, pLeftSubactionPath, 1);
                 _rightAimPoseAction = CreateAction("right_aim_pose", "Right Aim Pose", XrActionType.XR_ACTION_TYPE_POSE_INPUT, pRightSubactionPath, 1);
                 _rightGripPoseAction = CreateAction("right_grip_pose", "Right Grip Pose", XrActionType.XR_ACTION_TYPE_POSE_INPUT, pRightSubactionPath, 1);
@@ -364,6 +371,8 @@ namespace UnityVRMod.Features.VrVisualization
                 ulong rightThumbstickClick = StringToPath("/user/hand/right/input/thumbstick/click");
                 ulong rightAClick = StringToPath("/user/hand/right/input/a/click");
                 ulong rightBClick = StringToPath("/user/hand/right/input/b/click");
+                ulong leftYClick = StringToPath("/user/hand/left/input/y/click");
+                ulong leftAimPose = StringToPath("/user/hand/left/input/aim/pose");
                 ulong leftGripPose = StringToPath("/user/hand/left/input/grip/pose");
                 ulong rightAimPose = StringToPath("/user/hand/right/input/aim/pose");
                 ulong rightGripPose = StringToPath("/user/hand/right/input/grip/pose");
@@ -380,6 +389,8 @@ namespace UnityVRMod.Features.VrVisualization
                     new XrActionSuggestedBinding { action = _thumbstickClickAction, binding = rightThumbstickClick },
                     new XrActionSuggestedBinding { action = _aClickAction, binding = rightAClick },
                     new XrActionSuggestedBinding { action = _bClickAction, binding = rightBClick },
+                    new XrActionSuggestedBinding { action = _yClickAction, binding = leftYClick },
+                    new XrActionSuggestedBinding { action = _leftAimPoseAction, binding = leftAimPose },
                     new XrActionSuggestedBinding { action = _leftGripPoseAction, binding = leftGripPose },
                     new XrActionSuggestedBinding { action = _rightAimPoseAction, binding = rightAimPose },
                     new XrActionSuggestedBinding { action = _rightGripPoseAction, binding = rightGripPose }
@@ -436,6 +447,23 @@ namespace UnityVRMod.Features.VrVisualization
                     _leftGripSpace = OpenXRConstants.XR_NULL_HANDLE;
                 }
 
+                var leftAimSpaceCreateInfo = new XrActionSpaceCreateInfo
+                {
+                    type = XrStructureType.XR_TYPE_ACTION_SPACE_CREATE_INFO,
+                    action = _leftAimPoseAction,
+                    subactionPath = _leftHandPath,
+                    poseInActionSpace = new XrPosef
+                    {
+                        orientation = new XrQuaternionf { w = 1f }
+                    }
+                };
+                XrResult leftAimSpaceResult = OpenXRAPI.xrCreateActionSpace(_xrSession, in leftAimSpaceCreateInfo, out _leftAimSpace);
+                if (leftAimSpaceResult < 0)
+                {
+                    VRModCore.LogWarning($"[Input][OpenXR] Left aim space creation failed: {leftAimSpaceResult}");
+                    _leftAimSpace = OpenXRConstants.XR_NULL_HANDLE;
+                }
+
                 var rightAimSpaceCreateInfo = new XrActionSpaceCreateInfo
                 {
                     type = XrStructureType.XR_TYPE_ACTION_SPACE_CREATE_INFO,
@@ -487,13 +515,15 @@ namespace UnityVRMod.Features.VrVisualization
             _rightThumbstickAxisLogState = default;
             _leftThumbstickClickLogState = default;
             _rightThumbstickClickLogState = default;
+            _leftYLogState = default;
             _rightALogState = default;
             _rightBLogState = default;
             _inputSyncErrorLogged = false;
+            _leftAimPoseErrorLogged = false;
             _rightAimPoseErrorLogged = false;
             _leftGripPoseErrorLogged = false;
             _rightGripPoseErrorLogged = false;
-            VRModCore.Log("OpenXR input action set initialized (trigger, grip, thumbstick, A, B, left grip pose, right aim/grip pose).");
+            VRModCore.Log("OpenXR input action set initialized (trigger, grip, thumbstick, right A/B, left Y, left aim/grip pose, right aim/grip pose).");
         }
 
         private ulong StringToPath(string path)
@@ -847,17 +877,25 @@ namespace UnityVRMod.Features.VrVisualization
             if (_vrRig == null) return;
 
             Camera currentMainCamera = GetTrackedMainCamera();
-            float rightStickX = GetThumbstickX(_rightThumbstickAxisLogState);
-            float rightStickY = GetThumbstickY(_rightThumbstickAxisLogState);
-            bool isSmoothTurnHeld = IsBooleanActionPressed(_rightThumbstickClickLogState);
-            float rightGripValue = GetFloatActionValue(_rightGripLogState);
-            bool isGripHeld = rightGripValue >= GripHoldThreshold;
-            bool isTeleportAiming = UpdateTeleportAimStateFromStick(rightStickY);
-            bool isUiTogglePressed = IsBooleanActionPressed(_rightBLogState);
-            bool teleportConfirmPressed = IsTriggerPressed(_rightTriggerLogState);
+            OpenXrControlHand activeControlHand = GetActiveControlHand();
+            bool useLeftControlHand = activeControlHand == OpenXrControlHand.Left;
+            OpenXrVector2LogState activeThumbstickState = useLeftControlHand ? _leftThumbstickAxisLogState : _rightThumbstickAxisLogState;
+            OpenXrBooleanLogState activeThumbstickClickState = useLeftControlHand ? _leftThumbstickClickLogState : _rightThumbstickClickLogState;
+            OpenXrFloatLogState activeGripState = useLeftControlHand ? _leftGripLogState : _rightGripLogState;
+            OpenXrTriggerLogState activeTriggerState = useLeftControlHand ? _leftTriggerLogState : _rightTriggerLogState;
+            OpenXrBooleanLogState activeUiToggleState = useLeftControlHand ? _leftYLogState : _rightBLogState;
+
+            float activeStickX = GetThumbstickX(activeThumbstickState);
+            float activeStickY = GetThumbstickY(activeThumbstickState);
+            bool isSmoothTurnHeld = IsBooleanActionPressed(activeThumbstickClickState);
+            float activeGripValue = GetFloatActionValue(activeGripState);
+            bool isGripHeld = activeGripValue >= GripHoldThreshold;
+            bool isTeleportAiming = UpdateTeleportAimStateFromStick(activeStickY);
+            bool isUiTogglePressed = IsBooleanActionPressed(activeUiToggleState);
+            bool teleportConfirmPressed = IsTriggerPressed(activeTriggerState);
 
             bool hasGripLocalPose = false;
-            Vector3 rightGripLocalPos = default;
+            Vector3 activeGripLocalPos = default;
             bool hasLeftHandWorldPose = false;
             Vector3 leftHandWorldPos = default;
             Quaternion leftHandWorldRot = Quaternion.identity;
@@ -866,44 +904,80 @@ namespace UnityVRMod.Features.VrVisualization
             Quaternion rightHandWorldRot = Quaternion.identity;
             if (hasValidViewPose)
             {
-                hasGripLocalPose = TryGetRightGripPoseLocalPosition(_xrFrameState.predictedDisplayTime, out rightGripLocalPos);
+                hasGripLocalPose = useLeftControlHand
+                    ? TryGetLeftGripPoseLocalPosition(_xrFrameState.predictedDisplayTime, out activeGripLocalPos)
+                    : TryGetRightGripPoseLocalPosition(_xrFrameState.predictedDisplayTime, out activeGripLocalPos);
                 hasLeftHandWorldPose = TryGetLeftGripPoseWorldTransform(_xrFrameState.predictedDisplayTime, out leftHandWorldPos, out leftHandWorldRot);
                 hasRightHandWorldPose = TryGetRightGripPoseWorldTransform(_xrFrameState.predictedDisplayTime, out rightHandWorldPos, out rightHandWorldRot);
             }
 
+            bool hasActiveHandWorldPose = useLeftControlHand ? hasLeftHandWorldPose : hasRightHandWorldPose;
+            Vector3 activeHandWorldPos = useLeftControlHand ? leftHandWorldPos : rightHandWorldPos;
+            Quaternion activeHandWorldRot = useLeftControlHand ? leftHandWorldRot : rightHandWorldRot;
+
             bool hasPointerPose = false;
             Vector3 pointerOriginWorld = default;
             Vector3 pointerDirectionWorld = default;
+            bool hasLeftAimWorldPose = false;
+            Vector3 leftAimWorldPos = default;
+            Quaternion leftAimWorldRot = Quaternion.identity;
             bool hasRightAimWorldPose = false;
             Vector3 rightAimWorldPos = default;
             Quaternion rightAimWorldRot = Quaternion.identity;
             if (hasValidViewPose)
             {
-                hasRightAimWorldPose = TryGetRightAimPoseWorldTransform(_xrFrameState.predictedDisplayTime, out rightAimWorldPos, out rightAimWorldRot);
-                if (hasRightAimWorldPose)
+                if (useLeftControlHand)
                 {
-                    hasPointerPose = true;
-                    pointerOriginWorld = rightAimWorldPos;
-                    pointerDirectionWorld = (rightAimWorldRot * Vector3.forward).normalized;
+                    hasLeftAimWorldPose = TryGetLeftAimPoseWorldTransform(_xrFrameState.predictedDisplayTime, out leftAimWorldPos, out leftAimWorldRot);
+                    if (hasLeftAimWorldPose)
+                    {
+                        hasPointerPose = true;
+                        pointerOriginWorld = leftAimWorldPos;
+                        pointerDirectionWorld = (leftAimWorldRot * Vector3.forward).normalized;
+                    }
+                    else if (TryGetLeftAimPoseRay(_xrFrameState.predictedDisplayTime, out pointerOriginWorld, out pointerDirectionWorld))
+                    {
+                        hasPointerPose = true;
+                    }
+                    else if (hasLeftHandWorldPose)
+                    {
+                        hasPointerPose = true;
+                        pointerOriginWorld = leftHandWorldPos;
+                        pointerDirectionWorld = (leftHandWorldRot * Vector3.forward).normalized;
+                    }
                 }
                 else
                 {
-                    hasPointerPose = TryGetRightAimPoseRay(_xrFrameState.predictedDisplayTime, out pointerOriginWorld, out pointerDirectionWorld);
+                    hasRightAimWorldPose = TryGetRightAimPoseWorldTransform(_xrFrameState.predictedDisplayTime, out rightAimWorldPos, out rightAimWorldRot);
+                    if (hasRightAimWorldPose)
+                    {
+                        hasPointerPose = true;
+                        pointerOriginWorld = rightAimWorldPos;
+                        pointerDirectionWorld = (rightAimWorldRot * Vector3.forward).normalized;
+                    }
+                    else
+                    {
+                        hasPointerPose = TryGetRightAimPoseRay(_xrFrameState.predictedDisplayTime, out pointerOriginWorld, out pointerDirectionWorld);
+                    }
                 }
             }
 
-            bool hasPanelPose = hasRightHandWorldPose || hasRightAimWorldPose;
-            Vector3 panelWorldPos = hasRightHandWorldPose ? rightHandWorldPos : rightAimWorldPos;
-            Quaternion panelWorldRot = hasRightAimWorldPose ? rightAimWorldRot : rightHandWorldRot;
+            bool hasPanelPose = useLeftControlHand ? (hasLeftHandWorldPose || hasLeftAimWorldPose) : (hasRightHandWorldPose || hasRightAimWorldPose);
+            Vector3 panelWorldPos = useLeftControlHand
+                ? (hasLeftHandWorldPose ? leftHandWorldPos : leftAimWorldPos)
+                : (hasRightHandWorldPose ? rightHandWorldPos : rightAimWorldPos);
+            Quaternion panelWorldRot = useLeftControlHand
+                ? (hasLeftAimWorldPose ? leftAimWorldRot : leftHandWorldRot)
+                : (hasRightAimWorldPose ? rightAimWorldRot : rightHandWorldRot);
             HandlePlaneEditInput(
                 isUiTogglePressed,
                 teleportConfirmPressed,
                 hasPointerPose,
                 pointerOriginWorld,
                 pointerDirectionWorld,
-                hasRightHandWorldPose,
-                rightHandWorldPos,
-                rightHandWorldRot,
+                hasActiveHandWorldPose,
+                activeHandWorldPos,
+                activeHandWorldRot,
                 out bool uiToggleShortPress,
                 out bool isPlaneEditTriggerConsumed);
 
@@ -917,10 +991,10 @@ namespace UnityVRMod.Features.VrVisualization
             bool hasTeleportPointer = hasPointerPose && isTeleportAiming && !isGripHeld && !isPlaneEditTriggerConsumed;
             Vector3 cameraForwardWorld = currentMainCamera != null ? currentMainCamera.transform.forward : _vrRig.transform.forward;
 
-            _controllerVisualizer.Update(_vrRig, _vrRig.layer, hasLeftHandWorldPose, leftHandWorldPos, leftHandWorldRot, hasRightHandWorldPose, rightHandWorldPos, rightHandWorldRot);
+            _controllerVisualizer.Update(_vrRig, _vrRig.layer, hasLeftHandWorldPose, leftHandWorldPos, leftHandWorldRot, hasRightHandWorldPose, rightHandWorldPos, rightHandWorldRot, activeControlHand);
             _danmenProjectionPlane.Update(uiToggleShortPress, hasPanelPose, panelWorldPos, panelWorldRot, hasPointerPose, pointerOriginWorld, pointerDirectionWorld);
             bool locomotionTeleportConfirmPressed = teleportConfirmPressed && !isPlaneEditTriggerConsumed;
-            _locomotion.Update(_vrRig, rightStickX, isSmoothTurnHeld, isGripHeld, hasGripLocalPose, rightGripLocalPos, isTeleportAiming, locomotionTeleportConfirmPressed, hasTeleportPointer, pointerOriginWorld, pointerDirectionWorld, cameraForwardWorld, hasHmdPose, hmdWorldPos);
+            _locomotion.Update(_vrRig, activeStickX, isSmoothTurnHeld, isGripHeld, hasGripLocalPose, activeGripLocalPos, isTeleportAiming, locomotionTeleportConfirmPressed, hasTeleportPointer, pointerOriginWorld, pointerDirectionWorld, cameraForwardWorld, hasHmdPose, hmdWorldPos);
         }
 
         private void HandlePlaneEditInput(
@@ -1260,6 +1334,95 @@ namespace UnityVRMod.Features.VrVisualization
             _activePlaneEditResizeStartScale = 1f;
         }
 
+        private bool TryGetLeftAimPoseRay(long displayTime, out Vector3 originWorld, out Vector3 directionWorld)
+        {
+            originWorld = default;
+            directionWorld = default;
+
+            if (_vrRig == null ||
+                _appSpace == OpenXRConstants.XR_NULL_HANDLE ||
+                _leftAimSpace == OpenXRConstants.XR_NULL_HANDLE ||
+                OpenXRAPI.xrLocateSpace == null)
+            {
+                return false;
+            }
+
+            var location = new XrSpaceLocation
+            {
+                type = XrStructureType.XR_TYPE_SPACE_LOCATION
+            };
+
+            XrResult locateResult = OpenXRAPI.xrLocateSpace(_leftAimSpace, _appSpace, displayTime, out location);
+            if (locateResult < 0)
+            {
+                if (!_leftAimPoseErrorLogged)
+                {
+                    VRModCore.LogWarning($"[Input][OpenXR] xrLocateSpace(left aim) failed: {locateResult}");
+                    _leftAimPoseErrorLogged = true;
+                }
+                return false;
+            }
+
+            _leftAimPoseErrorLogged = false;
+            bool hasPosition = (location.locationFlags & XrSpaceLocationFlags.XR_SPACE_LOCATION_POSITION_VALID_BIT) != 0;
+            bool hasOrientation = (location.locationFlags & XrSpaceLocationFlags.XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) != 0;
+            if (!hasPosition || !hasOrientation)
+            {
+                return false;
+            }
+
+            Vector3 localPos = ToUnityLocalPosition(location.pose);
+            Quaternion localRot = ToUnityLocalRotation(location.pose);
+
+            originWorld = _vrRig.transform.TransformPoint(localPos);
+            directionWorld = _vrRig.transform.TransformDirection(localRot * Vector3.forward).normalized;
+            return true;
+        }
+
+        private bool TryGetLeftAimPoseWorldTransform(long displayTime, out Vector3 worldPosition, out Quaternion worldRotation)
+        {
+            worldPosition = default;
+            worldRotation = Quaternion.identity;
+
+            if (_vrRig == null ||
+                _appSpace == OpenXRConstants.XR_NULL_HANDLE ||
+                _leftAimSpace == OpenXRConstants.XR_NULL_HANDLE ||
+                OpenXRAPI.xrLocateSpace == null)
+            {
+                return false;
+            }
+
+            var location = new XrSpaceLocation
+            {
+                type = XrStructureType.XR_TYPE_SPACE_LOCATION
+            };
+
+            XrResult locateResult = OpenXRAPI.xrLocateSpace(_leftAimSpace, _appSpace, displayTime, out location);
+            if (locateResult < 0)
+            {
+                if (!_leftAimPoseErrorLogged)
+                {
+                    VRModCore.LogWarning($"[Input][OpenXR] xrLocateSpace(left aim) failed: {locateResult}");
+                    _leftAimPoseErrorLogged = true;
+                }
+                return false;
+            }
+
+            _leftAimPoseErrorLogged = false;
+            bool hasPosition = (location.locationFlags & XrSpaceLocationFlags.XR_SPACE_LOCATION_POSITION_VALID_BIT) != 0;
+            bool hasOrientation = (location.locationFlags & XrSpaceLocationFlags.XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) != 0;
+            if (!hasPosition || !hasOrientation)
+            {
+                return false;
+            }
+
+            Vector3 localPos = ToUnityLocalPosition(location.pose);
+            Quaternion localRot = ToUnityLocalRotation(location.pose);
+            worldPosition = _vrRig.transform.TransformPoint(localPos);
+            worldRotation = _vrRig.transform.rotation * localRot;
+            return true;
+        }
+
         private bool TryGetRightAimPoseRay(long displayTime, out Vector3 originWorld, out Vector3 directionWorld)
         {
             originWorld = default;
@@ -1346,6 +1509,18 @@ namespace UnityVRMod.Features.VrVisualization
             Quaternion localRot = ToUnityLocalRotation(location.pose);
             worldPosition = _vrRig.transform.TransformPoint(localPos);
             worldRotation = _vrRig.transform.rotation * localRot;
+            return true;
+        }
+
+        private bool TryGetLeftGripPoseLocalPosition(long displayTime, out Vector3 localPosition)
+        {
+            localPosition = default;
+            if (!TryLocateGripPose(_leftGripSpace, "left", displayTime, requireOrientation: false, ref _leftGripPoseErrorLogged, out Vector3 resolvedLocalPosition, out _))
+            {
+                return false;
+            }
+
+            localPosition = resolvedLocalPosition;
             return true;
         }
 
@@ -1477,6 +1652,11 @@ namespace UnityVRMod.Features.VrVisualization
             }
 
             return Camera.main;
+        }
+
+        private static OpenXrControlHand GetActiveControlHand()
+        {
+            return ConfigManager.OpenXR_ControlHand?.Value ?? OpenXrControlHand.Right;
         }
 
         private static bool IsBooleanActionPressed(OpenXrBooleanLogState state)
@@ -1647,7 +1827,7 @@ namespace UnityVRMod.Features.VrVisualization
             _uiProjectionPlane.Initialize(_vrRig, mainCamera);
             _uiInteractor.Initialize(mainCamera);
             _danmenProjectionPlane.Initialize(_vrRig);
-            VRModCore.Log("[UI][OpenXR] UI projection + ray interactor enabled (Trigger=UI click, B=panel anchor toggle).");
+            VRModCore.Log($"[UI][OpenXR] UI projection + ray interactor enabled (PrimaryHand={GetActiveControlHand()}, Trigger=UI click, Toggle={(GetActiveControlHand() == OpenXrControlHand.Left ? "Y(Left)" : "B(Right)")}).");
             if (_isUsing2dSyntheticFallbackCamera)
             {
                 VRModCore.Log("[Camera][OpenXR] 2D synthetic fallback mode active: eye cameras render VR rig layer only (projection-plane-first).");
@@ -1757,6 +1937,7 @@ namespace UnityVRMod.Features.VrVisualization
 
                 PollBooleanActionForHand("Left", "Thumbstick Click", _thumbstickClickAction, _leftHandPath, ref _leftThumbstickClickLogState);
                 PollBooleanActionForHand("Right", "Thumbstick Click", _thumbstickClickAction, _rightHandPath, ref _rightThumbstickClickLogState);
+                PollBooleanActionForHand("Left", "Y", _yClickAction, _leftHandPath, ref _leftYLogState);
                 PollBooleanActionForHand("Right", "A", _aClickAction, _rightHandPath, ref _rightALogState);
                 PollBooleanActionForHand("Right", "B", _bClickAction, _rightHandPath, ref _rightBLogState);
             }
@@ -1975,6 +2156,11 @@ namespace UnityVRMod.Features.VrVisualization
 
         private void TeardownInputActions()
         {
+            if (_leftAimSpace != OpenXRConstants.XR_NULL_HANDLE && OpenXRAPI.xrDestroySpace != null)
+            {
+                OpenXRAPI.xrDestroySpace(_leftAimSpace);
+            }
+
             if (_leftGripSpace != OpenXRConstants.XR_NULL_HANDLE && OpenXRAPI.xrDestroySpace != null)
             {
                 OpenXRAPI.xrDestroySpace(_leftGripSpace);
@@ -1993,6 +2179,16 @@ namespace UnityVRMod.Features.VrVisualization
             if (_bClickAction != OpenXRConstants.XR_NULL_HANDLE && OpenXRAPI.xrDestroyAction != null)
             {
                 OpenXRAPI.xrDestroyAction(_bClickAction);
+            }
+
+            if (_yClickAction != OpenXRConstants.XR_NULL_HANDLE && OpenXRAPI.xrDestroyAction != null)
+            {
+                OpenXRAPI.xrDestroyAction(_yClickAction);
+            }
+
+            if (_leftAimPoseAction != OpenXRConstants.XR_NULL_HANDLE && OpenXRAPI.xrDestroyAction != null)
+            {
+                OpenXRAPI.xrDestroyAction(_leftAimPoseAction);
             }
 
             if (_aClickAction != OpenXRConstants.XR_NULL_HANDLE && OpenXRAPI.xrDestroyAction != null)
@@ -2041,7 +2237,10 @@ namespace UnityVRMod.Features.VrVisualization
             }
 
             _bClickAction = OpenXRConstants.XR_NULL_HANDLE;
+            _yClickAction = OpenXRConstants.XR_NULL_HANDLE;
+            _leftAimPoseAction = OpenXRConstants.XR_NULL_HANDLE;
             _aClickAction = OpenXRConstants.XR_NULL_HANDLE;
+            _leftAimSpace = OpenXRConstants.XR_NULL_HANDLE;
             _rightAimPoseAction = OpenXRConstants.XR_NULL_HANDLE;
             _rightAimSpace = OpenXRConstants.XR_NULL_HANDLE;
             _leftGripPoseAction = OpenXRConstants.XR_NULL_HANDLE;
@@ -2063,9 +2262,11 @@ namespace UnityVRMod.Features.VrVisualization
             _rightThumbstickAxisLogState = default;
             _leftThumbstickClickLogState = default;
             _rightThumbstickClickLogState = default;
+            _leftYLogState = default;
             _rightALogState = default;
             _rightBLogState = default;
             _inputSyncErrorLogged = false;
+            _leftAimPoseErrorLogged = false;
             _rightAimPoseErrorLogged = false;
             _leftGripPoseErrorLogged = false;
             _rightGripPoseErrorLogged = false;

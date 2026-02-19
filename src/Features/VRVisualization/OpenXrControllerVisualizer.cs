@@ -45,7 +45,8 @@ namespace UnityVRMod.Features.VrVisualization
             Quaternion leftWorldRot,
             bool hasRightPose,
             Vector3 rightWorldPos,
-            Quaternion rightWorldRot)
+            Quaternion rightWorldRot,
+            OpenXrControlHand activeControlHand)
         {
             if (vrRig == null)
             {
@@ -59,8 +60,10 @@ namespace UnityVRMod.Features.VrVisualization
                 return;
             }
 
-            UpdateControllerObject(_leftControllerObject, hasLeftPose, leftWorldPos, leftWorldRot, LeftModelPositionOffset, LeftModelRotationOffset);
-            UpdateControllerObject(_rightControllerObject, hasRightPose, rightWorldPos, rightWorldRot, RightModelPositionOffset, RightModelRotationOffset);
+            bool showLeft = activeControlHand == OpenXrControlHand.Left && hasLeftPose;
+            bool showRight = activeControlHand == OpenXrControlHand.Right && hasRightPose;
+            UpdateControllerObject(_leftControllerObject, showLeft, leftWorldPos, leftWorldRot, LeftModelPositionOffset, LeftModelRotationOffset);
+            UpdateControllerObject(_rightControllerObject, showRight, rightWorldPos, rightWorldRot, RightModelPositionOffset, RightModelRotationOffset);
         }
 
         public void Teardown()

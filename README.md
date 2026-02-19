@@ -39,16 +39,19 @@
 
 ## 🎮 Controls (Oculus/Meta Touch)
 
+> [!TIP]
+> `OpenXR Control Hand` can switch the primary control hand between **Right** and **Left**.
+
 | Action | VR Controller Input |
 | :--- | :--- |
-| **Teleport Aim** | **Right Stick** (Up) |
-| **Confirm Teleport** | **Right Trigger** |
-| **Snap Turning** | **Right Stick** (Left/Right) |
-| **Smooth Turning** | **Right Stick Click (Hold)** + Move Left/Right |
-| **Move Viewport** | **Hold Grip** & Drag Hand |
-| **Toggle UI Panel** | **Button B** (Right) |
-| **Click/Select UI** | **Right Trigger** |
-| **Resize & Move UI Panel** | **Right Trigger** (on boundary) & Drag |
+| **Teleport Aim** | **Primary Hand Stick** (Up) |
+| **Confirm Teleport** | **Primary Hand Trigger** |
+| **Snap Turning** | **Primary Hand Stick** (Left/Right) |
+| **Smooth Turning** | **Primary Hand Stick Click (Hold)** + Move Left/Right |
+| **Move Viewport** | **Hold Primary Hand Grip** & Drag Hand |
+| **Toggle UI Panel** | **Button B (Right Hand)** / **Button Y (Left Hand)** |
+| **Click/Select UI** | **Primary Hand Trigger** |
+| **Resize & Move UI Panel** | **Primary Hand Trigger** (on boundary) & Drag |
 
 ---
 
