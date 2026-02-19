@@ -68,7 +68,6 @@
 > This mod is under active development. Below are the current known limitations and planned updates:
 
 *   **Hardware Compatibility**: Optimized for Quest 3. Compatibility for other HMDs is being evaluated.
-*   **Character Customization Scene**: This scene is currently not supported in VR.
 *   **ADV Scene**: Currently displayed as a 2D projection. Visual effects in VR may differ from the PC version and will be addressed in future updates.
 *   **Sub-Camera Panels**: Sub-Camera Panels within scenes are not yet projected into the VR view.
 *   **UI Integration**: Certain dialog icons currently require interaction via the main UI panel rather than direct clicking.
