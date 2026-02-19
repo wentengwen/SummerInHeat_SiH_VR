@@ -97,6 +97,7 @@ namespace UnityVRMod.Features.VrVisualization
         private ulong _inputActionSet = OpenXRConstants.XR_NULL_HANDLE;
         private ulong _triggerValueAction = OpenXRConstants.XR_NULL_HANDLE;
         private ulong _gripValueAction = OpenXRConstants.XR_NULL_HANDLE;
+        private ulong _hapticAction = OpenXRConstants.XR_NULL_HANDLE;
         private ulong _thumbstickAxisAction = OpenXRConstants.XR_NULL_HANDLE;
         private ulong _thumbstickClickAction = OpenXRConstants.XR_NULL_HANDLE;
         private ulong _aClickAction = OpenXRConstants.XR_NULL_HANDLE;
@@ -131,6 +132,8 @@ namespace UnityVRMod.Features.VrVisualization
         private const float TeleportAimStickPressThreshold = 0.60f;
         private const float TeleportAimStickReleaseThreshold = 0.45f;
         private const float GripHoldThreshold = 0.65f;
+        private const float UiTouchHapticAmplitude = 0.55f;
+        private const long UiTouchHapticDurationNs = 45_000_000L;
         private bool _leftAimPoseErrorLogged;
         private bool _rightAimPoseErrorLogged;
         private bool _leftGripPoseErrorLogged;
@@ -348,6 +351,7 @@ namespace UnityVRMod.Features.VrVisualization
 
                 _triggerValueAction = CreateAction("trigger_value", "Trigger Value", XrActionType.XR_ACTION_TYPE_FLOAT_INPUT, pSubactionPaths, 2);
                 _gripValueAction = CreateAction("grip_value", "Grip Value", XrActionType.XR_ACTION_TYPE_FLOAT_INPUT, pSubactionPaths, 2);
+                _hapticAction = CreateAction("haptic_output", "Haptic Output", XrActionType.XR_ACTION_TYPE_VIBRATION_OUTPUT, pSubactionPaths, 2);
                 _thumbstickAxisAction = CreateAction("thumbstick_axis", "Thumbstick Axis", XrActionType.XR_ACTION_TYPE_VECTOR2F_INPUT, pSubactionPaths, 2);
                 _thumbstickClickAction = CreateAction("thumbstick_click", "Thumbstick Click", XrActionType.XR_ACTION_TYPE_BOOLEAN_INPUT, pSubactionPaths, 2);
                 _aClickAction = CreateAction("a_click", "A Click", XrActionType.XR_ACTION_TYPE_BOOLEAN_INPUT, pRightSubactionPath, 1);
@@ -369,6 +373,8 @@ namespace UnityVRMod.Features.VrVisualization
                 ulong rightThumbstick = StringToPath("/user/hand/right/input/thumbstick");
                 ulong leftThumbstickClick = StringToPath("/user/hand/left/input/thumbstick/click");
                 ulong rightThumbstickClick = StringToPath("/user/hand/right/input/thumbstick/click");
+                ulong leftHaptic = StringToPath("/user/hand/left/output/haptic");
+                ulong rightHaptic = StringToPath("/user/hand/right/output/haptic");
                 ulong rightAClick = StringToPath("/user/hand/right/input/a/click");
                 ulong rightBClick = StringToPath("/user/hand/right/input/b/click");
                 ulong leftYClick = StringToPath("/user/hand/left/input/y/click");
@@ -387,6 +393,8 @@ namespace UnityVRMod.Features.VrVisualization
                     new XrActionSuggestedBinding { action = _thumbstickAxisAction, binding = rightThumbstick },
                     new XrActionSuggestedBinding { action = _thumbstickClickAction, binding = leftThumbstickClick },
                     new XrActionSuggestedBinding { action = _thumbstickClickAction, binding = rightThumbstickClick },
+                    new XrActionSuggestedBinding { action = _hapticAction, binding = leftHaptic },
+                    new XrActionSuggestedBinding { action = _hapticAction, binding = rightHaptic },
                     new XrActionSuggestedBinding { action = _aClickAction, binding = rightAClick },
                     new XrActionSuggestedBinding { action = _bClickAction, binding = rightBClick },
                     new XrActionSuggestedBinding { action = _yClickAction, binding = leftYClick },
@@ -984,6 +992,11 @@ namespace UnityVRMod.Features.VrVisualization
             _uiProjectionPlane.Update(currentMainCamera, uiToggleShortPress, hasPanelPose, panelWorldPos, panelWorldRot);
             bool uiTriggerPressed = !isPlaneEditTriggerConsumed && teleportConfirmPressed && !isTeleportAiming;
             _uiInteractor.Update(_vrRig, hasPointerPose, pointerOriginWorld, pointerDirectionWorld, uiTriggerPressed);
+            bool uiTouchInteractionTriggered = _uiInteractor.UpdateUiRayTouch(_vrRig, hasActiveHandWorldPose, activeHandWorldPos, activeHandWorldRot, isGripHeld);
+            if (uiTouchInteractionTriggered)
+            {
+                PlayUiTouchHaptic(activeControlHand);
+            }
 
             Vector3 hmdWorldPos = default;
             bool hasHmdPose = hasValidViewPose && TryGetCurrentHmdWorldPoseFromViews(out hmdWorldPos);
@@ -1659,6 +1672,43 @@ namespace UnityVRMod.Features.VrVisualization
             return ConfigManager.OpenXR_ControlHand?.Value ?? OpenXrControlHand.Right;
         }
 
+        private void PlayUiTouchHaptic(OpenXrControlHand controlHand)
+        {
+            if (_xrSession == OpenXRConstants.XR_NULL_HANDLE ||
+                _hapticAction == OpenXRConstants.XR_NULL_HANDLE ||
+                OpenXRAPI.xrApplyHapticFeedback == null)
+            {
+                return;
+            }
+
+            ulong subactionPath = controlHand == OpenXrControlHand.Left ? _leftHandPath : _rightHandPath;
+            if (subactionPath == OpenXRConstants.XR_NULL_PATH)
+            {
+                return;
+            }
+
+            var hapticInfo = new XrHapticActionInfo
+            {
+                type = XrStructureType.XR_TYPE_HAPTIC_ACTION_INFO,
+                action = _hapticAction,
+                subactionPath = subactionPath
+            };
+
+            var hapticVibration = new XrHapticVibration
+            {
+                type = XrStructureType.XR_TYPE_HAPTIC_VIBRATION,
+                duration = UiTouchHapticDurationNs,
+                frequency = 0f,
+                amplitude = UiTouchHapticAmplitude
+            };
+
+            XrResult hapticResult = OpenXRAPI.xrApplyHapticFeedback(_xrSession, in hapticInfo, in hapticVibration);
+            if (hapticResult < 0)
+            {
+                VRModCore.LogRuntimeDebug($"[Input][OpenXR] UI touch haptic failed: {hapticResult}");
+            }
+        }
+
         private static bool IsBooleanActionPressed(OpenXrBooleanLogState state)
         {
             return state.HasSample && state.IsActive && state.IsPressed;
@@ -2226,6 +2276,11 @@ namespace UnityVRMod.Features.VrVisualization
                 OpenXRAPI.xrDestroyAction(_gripValueAction);
             }
 
+            if (_hapticAction != OpenXRConstants.XR_NULL_HANDLE && OpenXRAPI.xrDestroyAction != null)
+            {
+                OpenXRAPI.xrDestroyAction(_hapticAction);
+            }
+
             if (_triggerValueAction != OpenXRConstants.XR_NULL_HANDLE && OpenXRAPI.xrDestroyAction != null)
             {
                 OpenXRAPI.xrDestroyAction(_triggerValueAction);
@@ -2250,6 +2305,7 @@ namespace UnityVRMod.Features.VrVisualization
             _thumbstickClickAction = OpenXRConstants.XR_NULL_HANDLE;
             _thumbstickAxisAction = OpenXRConstants.XR_NULL_HANDLE;
             _gripValueAction = OpenXRConstants.XR_NULL_HANDLE;
+            _hapticAction = OpenXRConstants.XR_NULL_HANDLE;
             _triggerValueAction = OpenXRConstants.XR_NULL_HANDLE;
             _inputActionSet = OpenXRConstants.XR_NULL_HANDLE;
             _leftHandPath = OpenXRConstants.XR_NULL_PATH;

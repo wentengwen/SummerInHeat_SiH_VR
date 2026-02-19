@@ -35,3 +35,5 @@ Thumbs.db
 UnityGraphicsHelper.dll
 *.pdb
 *.sig
+
+dnSpy/

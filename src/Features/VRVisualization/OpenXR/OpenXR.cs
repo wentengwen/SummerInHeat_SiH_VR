@@ -85,6 +85,7 @@ namespace UnityVRMod.Features.VRVisualization.OpenXR
         XR_TYPE_SESSION_BEGIN_INFO = 10,
         XR_TYPE_VIEW_STATE = 11,
         XR_TYPE_FRAME_END_INFO = 12,
+        XR_TYPE_HAPTIC_VIBRATION = 13,
         XR_TYPE_EVENT_DATA_BUFFER = 16,
         XR_TYPE_EVENT_DATA_INSTANCE_LOSS_PENDING = 17,
         XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED = 18,
@@ -107,6 +108,7 @@ namespace UnityVRMod.Features.VRVisualization.OpenXR
         XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO = 56,
         XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO = 57,
         XR_TYPE_ACTION_STATE_GET_INFO = 58,
+        XR_TYPE_HAPTIC_ACTION_INFO = 59,
         XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO = 60,
         XR_TYPE_ACTIONS_SYNC_INFO = 61,
         XR_TYPE_VIEW_CONFIGURATION_VIEW = 41,
@@ -199,6 +201,8 @@ namespace UnityVRMod.Features.VRVisualization.OpenXR
     [UnmanagedFunctionPointer(CallingConvention.StdCall)] public delegate XrResult PFN_xrWaitSwapchainImage(ulong swapchain, in XrSwapchainImageWaitInfo waitInfo);
     [UnmanagedFunctionPointer(CallingConvention.StdCall)] public delegate XrResult PFN_xrReleaseSwapchainImage(ulong swapchain, in XrSwapchainImageReleaseInfo releaseInfo);
     [UnmanagedFunctionPointer(CallingConvention.StdCall)] public delegate XrResult PFN_xrEndSession(ulong session);
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)] public delegate XrResult PFN_xrApplyHapticFeedback(ulong session, in XrHapticActionInfo hapticActionInfo, in XrHapticVibration hapticFeedback);
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)] public delegate XrResult PFN_xrStopHapticFeedback(ulong session, in XrHapticActionInfo hapticActionInfo);
     #endregion
 
     #region --- Native Loader ---
@@ -296,6 +300,8 @@ namespace UnityVRMod.Features.VRVisualization.OpenXR
         public static PFN_xrWaitSwapchainImage xrWaitSwapchainImage;
         public static PFN_xrReleaseSwapchainImage xrReleaseSwapchainImage;
         public static PFN_xrEndSession xrEndSession;
+        public static PFN_xrApplyHapticFeedback xrApplyHapticFeedback;
+        public static PFN_xrStopHapticFeedback xrStopHapticFeedback;
 
         public static bool InitializeCoreFunctions(PFN_xrGetInstanceProcAddr getInstanceProcAddrEntry)
         {
@@ -345,6 +351,8 @@ namespace UnityVRMod.Features.VRVisualization.OpenXR
                 xrWaitSwapchainImage = GetXrFunction<PFN_xrWaitSwapchainImage>(instanceHandle, xrGetInstanceProcAddr_func_ptr);
                 xrReleaseSwapchainImage = GetXrFunction<PFN_xrReleaseSwapchainImage>(instanceHandle, xrGetInstanceProcAddr_func_ptr);
                 xrEndSession = GetXrFunction<PFN_xrEndSession>(instanceHandle, xrGetInstanceProcAddr_func_ptr);
+                xrApplyHapticFeedback = GetXrFunction<PFN_xrApplyHapticFeedback>(instanceHandle, xrGetInstanceProcAddr_func_ptr);
+                xrStopHapticFeedback = GetXrFunction<PFN_xrStopHapticFeedback>(instanceHandle, xrGetInstanceProcAddr_func_ptr);
                 return true;
             }
             catch (Exception ex)
@@ -440,6 +448,9 @@ namespace UnityVRMod.Features.VRVisualization.OpenXR
     [StructLayout(LayoutKind.Sequential)] public struct XrActionsSyncInfo { public XrStructureType type; public IntPtr next; public uint countActiveActionSets; public IntPtr activeActionSets; }
     [StructLayout(LayoutKind.Sequential)] public struct XrActionSpaceCreateInfo { public XrStructureType type; public IntPtr next; public ulong action; public ulong subactionPath; public XrPosef poseInActionSpace; }
     [StructLayout(LayoutKind.Sequential)] public struct XrActionStateGetInfo { public XrStructureType type; public IntPtr next; public ulong action; public ulong subactionPath; }
+    [StructLayout(LayoutKind.Sequential)] public struct XrHapticActionInfo { public XrStructureType type; public IntPtr next; public ulong action; public ulong subactionPath; }
+    [StructLayout(LayoutKind.Sequential)] public struct XrHapticBaseHeader { public XrStructureType type; public IntPtr next; }
+    [StructLayout(LayoutKind.Sequential)] public struct XrHapticVibration { public XrStructureType type; public IntPtr next; public long duration; public float frequency; public float amplitude; }
     [StructLayout(LayoutKind.Sequential)] public struct XrActionStateBoolean { public XrStructureType type; public IntPtr next; public uint currentState; public uint changedSinceLastSync; public long lastChangeTime; public uint isActive; }
     [StructLayout(LayoutKind.Sequential)] public struct XrActionStateFloat { public XrStructureType type; public IntPtr next; public float currentState; public uint changedSinceLastSync; public long lastChangeTime; public uint isActive; }
     [StructLayout(LayoutKind.Sequential)] public struct XrVector2f { public float x; public float y; }
