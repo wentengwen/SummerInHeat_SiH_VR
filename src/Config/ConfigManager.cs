@@ -45,6 +45,8 @@ namespace UnityVRMod.Config
         public static ConfigElement<float> OpenXR_SmoothTurnDegreesPerSecond;
         public static ConfigElement<OpenXrControlHand> OpenXR_ControlHand;
         public static ConfigElement<bool> OpenXR_EnablePerfLogging;
+        public static ConfigElement<string> OpenXR_ForceDefaultRenderScenes;
+        public static ConfigElement<string> OpenXR_ForceSolidClearScenes;
 #endif
 
         // --- General Settings ---
@@ -178,6 +180,12 @@ namespace UnityVRMod.Config
 
             OpenXR_EnablePerfLogging = new ConfigElement<bool>("OpenXR Enable Perf Logging",
                 "[OpenXR ONLY] Enables periodic [Perf][OpenXR] timing logs for diagnosis.", false);
+
+            OpenXR_ForceDefaultRenderScenes = new ConfigElement<string>("OpenXR Force Default Render Scenes",
+                "[OpenXR ONLY] Forces safe default VR eye-camera render state in specific scenes to avoid artifacts from copied main-camera settings. Format: 'SceneNameA;SceneNameB;'.", "");
+
+            OpenXR_ForceSolidClearScenes = new ConfigElement<string>("OpenXR Force Solid Clear Scenes",
+                "[OpenXR ONLY] Keeps main-camera reference and PostFX sync, but forces VR eye-camera clearFlags to SolidColor in specific scenes. Useful when main camera uses ClearFlags=Nothing and causes ghosting/overexposure in VR. Format: 'SceneNameA;SceneNameB;'.", "");
 #endif
 
             // --- General Settings ---

@@ -135,8 +135,14 @@ namespace UnityVRMod.Features.VRVisualization.OpenXR
         XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT = 4,
         XR_SPACE_LOCATION_POSITION_TRACKED_BIT = 8
     }
-    [Flags] public enum XrCompositionLayerFlags : ulong { None = 0 }
-
+    [Flags]
+    public enum XrCompositionLayerFlags : ulong
+    {
+        None = 0,
+        XR_COMPOSITION_LAYER_CORRECT_CHROMATIC_ABERRATION_BIT = 0x00000001,
+        XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT = 0x00000002,
+        XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT = 0x00000004
+    }
     #endregion
 
     #region --- Constants ---
@@ -264,8 +270,10 @@ namespace UnityVRMod.Features.VRVisualization.OpenXR
     {
         private static PFN_xrGetInstanceProcAddr xrGetInstanceProcAddr_func_ptr;
         public static PFN_xrCreateInstance xrCreateInstance;
+        public static PFN_xrEnumerateInstanceExtensionProperties xrEnumerateInstanceExtensionProperties;
         public static PFN_xrDestroyInstance xrDestroyInstance;
         public static PFN_xrGetSystem xrGetSystem;
+        public static PFN_xrGetSystemProperties xrGetSystemProperties;
         public static PFN_xrGetD3D11GraphicsRequirementsKHR xrGetD3D11GraphicsRequirementsKHR;
         public static PFN_xrCreateSession xrCreateSession;
         public static PFN_xrDestroySession xrDestroySession;
@@ -307,6 +315,7 @@ namespace UnityVRMod.Features.VRVisualization.OpenXR
         {
             xrGetInstanceProcAddr_func_ptr = getInstanceProcAddrEntry ?? throw new ArgumentNullException(nameof(getInstanceProcAddrEntry));
             xrCreateInstance = GetXrFunction<PFN_xrCreateInstance>(OpenXRConstants.XR_NULL_HANDLE, xrGetInstanceProcAddr_func_ptr);
+            xrEnumerateInstanceExtensionProperties = GetXrFunction<PFN_xrEnumerateInstanceExtensionProperties>(OpenXRConstants.XR_NULL_HANDLE, xrGetInstanceProcAddr_func_ptr);
             return true;
         }
 
@@ -317,6 +326,7 @@ namespace UnityVRMod.Features.VRVisualization.OpenXR
             {
                 xrDestroyInstance = GetXrFunction<PFN_xrDestroyInstance>(instanceHandle, xrGetInstanceProcAddr_func_ptr);
                 xrGetSystem = GetXrFunction<PFN_xrGetSystem>(instanceHandle, xrGetInstanceProcAddr_func_ptr);
+                xrGetSystemProperties = GetXrFunction<PFN_xrGetSystemProperties>(instanceHandle, xrGetInstanceProcAddr_func_ptr);
                 xrGetD3D11GraphicsRequirementsKHR = GetXrFunction<PFN_xrGetD3D11GraphicsRequirementsKHR>(instanceHandle, xrGetInstanceProcAddr_func_ptr);
                 xrCreateSession = GetXrFunction<PFN_xrCreateSession>(instanceHandle, xrGetInstanceProcAddr_func_ptr);
                 xrDestroySession = GetXrFunction<PFN_xrDestroySession>(instanceHandle, xrGetInstanceProcAddr_func_ptr);

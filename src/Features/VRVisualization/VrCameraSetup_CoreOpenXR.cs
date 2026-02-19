@@ -6,6 +6,7 @@ using UnityVRMod.Config;
 using UnityVRMod.Core;
 using UnityVRMod.Features.Util;
 using UnityVRMod.Features.VRVisualization.OpenXR;
+using System.Text;
 
 namespace UnityVRMod.Features.VrVisualization
 {
@@ -59,7 +60,14 @@ namespace UnityVRMod.Features.VrVisualization
         private Color _mainCameraBackgroundColor;
         private int _mainCameraCullingMask;
         private bool _isUsing2dSyntheticFallbackCamera;
+        private bool _isUsingForcedDefaultRenderState;
+        private bool _isUsingForcedSolidClearState;
+        private readonly HashSet<string> _forceDefaultRenderSceneNames = new(StringComparer.OrdinalIgnoreCase);
+        private string _cachedForceDefaultRenderScenesRaw = string.Empty;
+        private readonly HashSet<string> _forceSolidClearSceneNames = new(StringComparer.OrdinalIgnoreCase);
+        private string _cachedForceSolidClearScenesRaw = string.Empty;
         private const int VrRigRenderLayer = 31;
+        private static readonly Color VrRigClearColor = new(0.4623f, 0.4623f, 0.4623f, 0f);
         private static bool EnableOpenXrPostFxSync = true;
         private const float OpenXrPerfLogIntervalSeconds = 1.0f;
 
@@ -76,6 +84,7 @@ namespace UnityVRMod.Features.VrVisualization
         private float _lastXrEndFrameCpuMs;
         private int _lastPoseValidFlag;
         private float _nextOpenXrPerfLogTime;
+        private bool _hasLoggedXrEndFrameFailure;
 
         private readonly List<List<IntPtr>> _eyeSwapchainSRVs = [];
         private readonly OpenXrRigLocomotion _locomotion = new();
@@ -210,7 +219,6 @@ namespace UnityVRMod.Features.VrVisualization
 
                 string[] requestedExtensions = [OpenXRConstants.XR_KHR_D3D11_ENABLE_EXTENSION_NAME];
                 IntPtr pRequestedExtensions = MarshallStringUtils.MarshalStringArrayToAnsi(requestedExtensions);
-
                 var instanceCreateInfo = new XrInstanceCreateInfo
                 {
                     type = XrStructureType.XR_TYPE_INSTANCE_CREATE_INFO,
@@ -218,7 +226,6 @@ namespace UnityVRMod.Features.VrVisualization
                     enabledExtensionCount = (uint)requestedExtensions.Length,
                     enabledExtensionNames = pRequestedExtensions
                 };
-
                 OpenXRHelper.CheckResult(OpenXRAPI.xrCreateInstance(in instanceCreateInfo, out _xrInstance), "xrCreateInstance");
                 MarshallStringUtils.FreeMarshalledStringArray(pRequestedExtensions, requestedExtensions.Length);
                 if (_xrInstance == OpenXRConstants.XR_NULL_HANDLE) throw new Exception("xrCreateInstance returned a null handle.");
@@ -282,8 +289,8 @@ namespace UnityVRMod.Features.VrVisualization
                     _pProjectionLayerViews = Marshal.AllocHGlobal(Marshal.SizeOf<XrCompositionLayerProjectionView>() * _viewConfigViews.Count);
                     _projectionLayer = new XrCompositionLayerProjection { type = XrStructureType.XR_TYPE_COMPOSITION_LAYER_PROJECTION };
                     _pProjectionLayer = Marshal.AllocHGlobal(Marshal.SizeOf<XrCompositionLayerProjection>());
-                    _pLayersForSubmit = Marshal.AllocHGlobal(Marshal.SizeOf<IntPtr>() * 1);
-                    Marshal.WriteIntPtr(_pLayersForSubmit, _pProjectionLayer);
+                    _pLayersForSubmit = Marshal.AllocHGlobal(Marshal.SizeOf<IntPtr>());
+                    Marshal.WriteIntPtr(_pLayersForSubmit, IntPtr.Zero);
                 }
 
                 _flushCommandBuffer ??= new CommandBuffer
@@ -534,6 +541,20 @@ namespace UnityVRMod.Features.VrVisualization
             VRModCore.Log("OpenXR input action set initialized (trigger, grip, thumbstick, right A/B, left Y, left aim/grip pose, right aim/grip pose).");
         }
 
+        private void LogEndFrameFailureOnce(XrResult endFrameResult, in XrFrameEndInfo frameEndInfo)
+        {
+            if (endFrameResult >= 0)
+            {
+                _hasLoggedXrEndFrameFailure = false;
+                return;
+            }
+
+            if (_hasLoggedXrEndFrameFailure) return;
+            _hasLoggedXrEndFrameFailure = true;
+            VRModCore.LogWarning(
+                $"[OpenXR] xrEndFrame failed: {endFrameResult} (layerCount={frameEndInfo.layerCount}, blend={frameEndInfo.environmentBlendMode})");
+        }
+
         private ulong StringToPath(string path)
         {
             OpenXRHelper.CheckResult(OpenXRAPI.xrStringToPath(_xrInstance, path, out ulong xrPath), $"xrStringToPath({path})");
@@ -721,7 +742,8 @@ namespace UnityVRMod.Features.VrVisualization
             {
                 var discardedFrameEndInfo = new XrFrameEndInfo { type = XrStructureType.XR_TYPE_FRAME_END_INFO, displayTime = _xrFrameState.predictedDisplayTime, layerCount = 0, layers = IntPtr.Zero, environmentBlendMode = XrEnvironmentBlendMode.XR_ENVIRONMENT_BLEND_MODE_OPAQUE };
                 float discardedEndFrameStartTime = Time.realtimeSinceStartup;
-                OpenXRAPI.xrEndFrame(_xrSession, in discardedFrameEndInfo);
+                XrResult discardedEndFrameResult = OpenXRAPI.xrEndFrame(_xrSession, in discardedFrameEndInfo);
+                LogEndFrameFailureOnce(discardedEndFrameResult, in discardedFrameEndInfo);
                 _lastXrEndFrameCpuMs = (Time.realtimeSinceStartup - discardedEndFrameStartTime) * 1000f;
                 _lastUpdatePosesCpuMs = (Time.realtimeSinceStartup - updatePosesStartTime) * 1000f;
                 LogOpenXrPerfIfNeeded();
@@ -730,6 +752,7 @@ namespace UnityVRMod.Features.VrVisualization
 
             var frameEndInfo = new XrFrameEndInfo { type = XrStructureType.XR_TYPE_FRAME_END_INFO, displayTime = _xrFrameState.predictedDisplayTime, environmentBlendMode = XrEnvironmentBlendMode.XR_ENVIRONMENT_BLEND_MODE_OPAQUE, layerCount = 0, layers = IntPtr.Zero };
             bool locomotionUpdated = false;
+            bool submitProjectionLayer = false;
 
             if (_xrFrameState.shouldRender == XrBool32.XR_TRUE)
             {
@@ -774,8 +797,7 @@ namespace UnityVRMod.Features.VrVisualization
                     OpenXRAPI.xrReleaseSwapchainImage(_eyeSwapchains[1], in releaseInfo);
 
                     PopulateProjectionLayer();
-                    frameEndInfo.layerCount = 1;
-                    frameEndInfo.layers = _pLayersForSubmit;
+                    submitProjectionLayer = true;
                 }
             }
 
@@ -786,8 +808,16 @@ namespace UnityVRMod.Features.VrVisualization
                 _lastLocomotionCpuMs = (Time.realtimeSinceStartup - locomotionStartTime) * 1000f;
             }
 
+            if (submitProjectionLayer && _pLayersForSubmit != IntPtr.Zero && _pProjectionLayer != IntPtr.Zero)
+            {
+                Marshal.WriteIntPtr(_pLayersForSubmit, _pProjectionLayer);
+                frameEndInfo.layerCount = 1;
+                frameEndInfo.layers = _pLayersForSubmit;
+            }
+
             float endFrameStartTime = Time.realtimeSinceStartup;
-            OpenXRAPI.xrEndFrame(_xrSession, in frameEndInfo);
+            XrResult endFrameResult = OpenXRAPI.xrEndFrame(_xrSession, in frameEndInfo);
+            LogEndFrameFailureOnce(endFrameResult, in frameEndInfo);
             _lastXrEndFrameCpuMs = (Time.realtimeSinceStartup - endFrameStartTime) * 1000f;
             _lastUpdatePosesCpuMs = (Time.realtimeSinceStartup - updatePosesStartTime) * 1000f;
             LogOpenXrPerfIfNeeded();
@@ -1827,6 +1857,8 @@ namespace UnityVRMod.Features.VrVisualization
 
             var poseOverrides = PoseParser.Parse(ConfigManager.ScenePoseOverrides.Value);
             string currentSceneName = mainCamera.gameObject.scene.name;
+            _isUsingForcedDefaultRenderState = ShouldForceDefaultRenderStateForScene(currentSceneName);
+            _isUsingForcedSolidClearState = !_isUsingForcedDefaultRenderState && ShouldForceSolidClearStateForScene(currentSceneName);
 
             if (poseOverrides.TryGetValue(currentSceneName, out PoseOverride poseOverride))
             {
@@ -1860,11 +1892,13 @@ namespace UnityVRMod.Features.VrVisualization
             _rightVrCamera = _rightVrCameraGO.AddComponent<Camera>();
             ConfigureVrCamera(_rightVrCamera, mainCamera, "Right");
 
-            if (!_isUsing2dSyntheticFallbackCamera && EnableOpenXrPostFxSync)
+            bool useFallbackRenderState = ShouldUseFallbackRenderState();
+            LogReferenceCameraDiagnostics(mainCamera, currentSceneName, useFallbackRenderState);
+            if (!useFallbackRenderState && EnableOpenXrPostFxSync)
             {
                 SyncOpenXrPostProcessing(mainCamera);
             }
-            else if (!_isUsing2dSyntheticFallbackCamera && !EnableOpenXrPostFxSync)
+            else if (!useFallbackRenderState && !EnableOpenXrPostFxSync)
             {
                 VRModCore.LogRuntimeDebug("[PostFX][OpenXR] PostFX sync disabled for performance test.");
             }
@@ -1881,6 +1915,14 @@ namespace UnityVRMod.Features.VrVisualization
             if (_isUsing2dSyntheticFallbackCamera)
             {
                 VRModCore.Log("[Camera][OpenXR] 2D synthetic fallback mode active: eye cameras render VR rig layer only (projection-plane-first).");
+            }
+            else if (_isUsingForcedDefaultRenderState)
+            {
+                VRModCore.Log($"[Camera][OpenXR] Forced default render state active for scene '{currentSceneName}' (main-camera PostFX sync skipped).");
+            }
+            else if (_isUsingForcedSolidClearState)
+            {
+                VRModCore.Log($"[Camera][OpenXR] Forced solid clear active for scene '{currentSceneName}' (main-camera clearFlags ignored).");
             }
 
             VRModCore.Log("OpenXR: VR Camera Rig setup complete.");
@@ -1925,8 +1967,24 @@ namespace UnityVRMod.Features.VrVisualization
             if (_isUsing2dSyntheticFallbackCamera)
             {
                 vrCam.clearFlags = CameraClearFlags.SolidColor;
-                vrCam.backgroundColor = Color.black;
+                vrCam.backgroundColor = VrRigClearColor;
                 vrCam.cullingMask = GetVrRigLayerMask();
+                return;
+            }
+
+            if (_isUsingForcedDefaultRenderState)
+            {
+                vrCam.clearFlags = CameraClearFlags.SolidColor;
+                vrCam.backgroundColor = VrRigClearColor;
+                vrCam.cullingMask = _mainCameraCullingMask | GetVrRigLayerMask();
+                return;
+            }
+
+            if (_isUsingForcedSolidClearState)
+            {
+                vrCam.clearFlags = CameraClearFlags.SolidColor;
+                vrCam.backgroundColor = VrRigClearColor;
+                vrCam.cullingMask = _mainCameraCullingMask | GetVrRigLayerMask();
                 return;
             }
 
@@ -1936,6 +1994,77 @@ namespace UnityVRMod.Features.VrVisualization
             {
                 vrCam.backgroundColor = _mainCameraBackgroundColor;
             }
+        }
+
+        private bool ShouldUseFallbackRenderState()
+        {
+            return _isUsing2dSyntheticFallbackCamera || _isUsingForcedDefaultRenderState;
+        }
+
+        private void RefreshForceDefaultRenderScenesCacheIfNeeded()
+        {
+            string raw = ConfigManager.OpenXR_ForceDefaultRenderScenes?.Value ?? string.Empty;
+            if (string.Equals(raw, _cachedForceDefaultRenderScenesRaw, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _cachedForceDefaultRenderScenesRaw = raw;
+            _forceDefaultRenderSceneNames.Clear();
+
+            string[] tokens = raw.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string token in tokens)
+            {
+                string sceneName = token.Trim();
+                if (sceneName.Length > 0)
+                {
+                    _forceDefaultRenderSceneNames.Add(sceneName);
+                }
+            }
+        }
+
+        private bool ShouldForceDefaultRenderStateForScene(string sceneName)
+        {
+            if (string.IsNullOrEmpty(sceneName))
+            {
+                return false;
+            }
+
+            RefreshForceDefaultRenderScenesCacheIfNeeded();
+            return _forceDefaultRenderSceneNames.Contains(sceneName);
+        }
+
+        private void RefreshForceSolidClearScenesCacheIfNeeded()
+        {
+            string raw = ConfigManager.OpenXR_ForceSolidClearScenes?.Value ?? string.Empty;
+            if (string.Equals(raw, _cachedForceSolidClearScenesRaw, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _cachedForceSolidClearScenesRaw = raw;
+            _forceSolidClearSceneNames.Clear();
+
+            string[] tokens = raw.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string token in tokens)
+            {
+                string sceneName = token.Trim();
+                if (sceneName.Length > 0)
+                {
+                    _forceSolidClearSceneNames.Add(sceneName);
+                }
+            }
+        }
+
+        private bool ShouldForceSolidClearStateForScene(string sceneName)
+        {
+            if (string.IsNullOrEmpty(sceneName))
+            {
+                return false;
+            }
+
+            RefreshForceSolidClearScenesCacheIfNeeded();
+            return _forceSolidClearSceneNames.Contains(sceneName);
         }
 
         private int GetVrRigLayerMask()
@@ -2609,6 +2738,104 @@ namespace UnityVRMod.Features.VrVisualization
             return false;
         }
 
+        private void LogReferenceCameraDiagnostics(Camera mainCamera, string sceneName, bool useFallbackRenderState)
+        {
+            if (mainCamera == null) return;
+
+            string mainCameraPath = GetTransformPath(mainCamera.transform);
+            string mainCameraSummary = DescribeCamera(mainCamera);
+            VRModCore.Log($"[CameraDiag][OpenXR] Scene='{sceneName}', Main='{mainCamera.name}', Path='{mainCameraPath}', UseFallbackRenderState={useFallbackRenderState}, IsSynthetic2D={_isUsing2dSyntheticFallbackCamera}, ForcedDefault={_isUsingForcedDefaultRenderState}, ForcedSolidClear={_isUsingForcedSolidClearState}");
+            VRModCore.Log($"[CameraDiag][OpenXR] Main settings: {mainCameraSummary}");
+
+            List<string> mainFx = CollectTargetEffects(mainCamera, IsTargetMainEffectType);
+            if (mainFx.Count > 0)
+            {
+                VRModCore.Log($"[CameraDiag][OpenXR] Main target FX ({mainFx.Count}): {string.Join(", ", mainFx)}");
+            }
+            else
+            {
+                VRModCore.Log("[CameraDiag][OpenXR] Main target FX: none");
+            }
+
+            Camera hdrSource = FindHdrEffectSourceCamera(mainCamera);
+            if (hdrSource != null)
+            {
+                string hdrPath = GetTransformPath(hdrSource.transform);
+                string hdrSummary = DescribeCamera(hdrSource);
+                VRModCore.Log($"[CameraDiag][OpenXR] HDR source='{hdrSource.name}', Path='{hdrPath}', Settings={hdrSummary}");
+
+                List<string> hdrFx = CollectTargetEffects(hdrSource, IsTargetHdrEffectType);
+                if (hdrFx.Count > 0)
+                {
+                    VRModCore.Log($"[CameraDiag][OpenXR] HDR target FX ({hdrFx.Count}): {string.Join(", ", hdrFx)}");
+                }
+                else
+                {
+                    VRModCore.Log("[CameraDiag][OpenXR] HDR target FX: none");
+                }
+            }
+            else
+            {
+                VRModCore.Log("[CameraDiag][OpenXR] HDR source: none");
+            }
+        }
+
+        private static List<string> CollectTargetEffects(Camera camera, Func<Type, bool> filter)
+        {
+            List<string> result = [];
+            if (camera == null || filter == null) return result;
+
+            MonoBehaviour[] behaviours = camera.GetComponents<MonoBehaviour>();
+            if (behaviours == null || behaviours.Length == 0) return result;
+
+            for (int i = 0; i < behaviours.Length; i++)
+            {
+                MonoBehaviour behaviour = behaviours[i];
+                if (behaviour == null) continue;
+                Type type = behaviour.GetType();
+                if (!filter(type)) continue;
+
+                bool enabled = behaviour is Behaviour b && b.enabled;
+                string typeName = type.FullName ?? type.Name ?? "UnknownType";
+                result.Add($"{typeName}[{(enabled ? "On" : "Off")}]");
+            }
+
+            return result;
+        }
+
+        private static string DescribeCamera(Camera camera)
+        {
+            if (camera == null) return "null";
+
+            string targetTextureName = camera.targetTexture != null ? camera.targetTexture.name : "null";
+            return
+                $"enabled={camera.enabled}, clearFlags={camera.clearFlags}, bg=({camera.backgroundColor.r:F2},{camera.backgroundColor.g:F2},{camera.backgroundColor.b:F2},{camera.backgroundColor.a:F2}), " +
+                $"cullingMask=0x{camera.cullingMask:X8}, depth={camera.depth:F2}, depthTextureMode={camera.depthTextureMode}, renderingPath={camera.renderingPath}, allowHDR={camera.allowHDR}, allowMSAA={camera.allowMSAA}, " +
+                $"orthographic={camera.orthographic}, near={camera.nearClipPlane:F3}, far={camera.farClipPlane:F3}, targetTexture={targetTextureName}";
+        }
+
+        private static string GetTransformPath(Transform transform)
+        {
+            if (transform == null) return string.Empty;
+
+            StringBuilder sb = new();
+            Transform current = transform;
+            while (current != null)
+            {
+                if (sb.Length == 0)
+                {
+                    sb.Insert(0, current.name);
+                }
+                else
+                {
+                    sb.Insert(0, '/');
+                    sb.Insert(0, current.name);
+                }
+                current = current.parent;
+            }
+            return sb.ToString();
+        }
+
         private static void CopyComponentFields(Component source, Component destination)
         {
             if (source == null || destination == null) return;
@@ -2902,6 +3129,8 @@ namespace UnityVRMod.Features.VrVisualization
             _danmenProjectionPlane.Teardown();
             ClearAllSyncedPostFxComponents();
             _isUsing2dSyntheticFallbackCamera = false;
+            _isUsingForcedDefaultRenderState = false;
+            _isUsingForcedSolidClearState = false;
             if (_leftEyeIntermediateRT != null) { _leftEyeIntermediateRT.Release(); UnityEngine.Object.Destroy(_leftEyeIntermediateRT); _leftEyeIntermediateRT = null; }
             if (_rightEyeIntermediateRT != null) { _rightEyeIntermediateRT.Release(); UnityEngine.Object.Destroy(_rightEyeIntermediateRT); _rightEyeIntermediateRT = null; }
             if (_vrRig != null) { UnityEngine.Object.Destroy(_vrRig); _vrRig = null; }
