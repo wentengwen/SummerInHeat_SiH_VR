@@ -53,12 +53,24 @@
 | **Click/Select UI** | **Primary Hand Trigger** |
 | **Resize & Move UI Panel** | **Primary Hand Trigger** (on boundary) & Drag |
 | **Petting Interact** | **Touch target with Primary Hand controller** + **Primary Hand Grip** |
+| **Toggle SubCam Move Mode** | **Hold Button A (Right Hand)** |
+| **Move SubCam** | **Right Stick** (while SubCam Move Mode is ON) |
+| **Rotate SubCam** | **Hold Right Stick Click** + **Right Stick** |
+| **SubCam Height Step** | **Tap A (Up) / Tap B (Down)** (while SubCam Move Mode is ON) |
 
 ### Petting Interaction
 
 1. Move your primary hand controller close to the target body point.
 2. When a valid target is detected, an interaction icon appears on the controller.
 3. Press **Primary Hand Grip** to trigger the interaction logic.
+
+### SubCamera Control
+
+1. **Hold A** to toggle SubCam move mode ON/OFF.
+2. When move mode is ON, move the **Right Stick** to move subcamera.
+3. Hold **Right Stick Click**, then move stick to rotate.
+4. In move mode, **tap A** to raise height and **tap B** to lower height.
+5. Red SubCam outline is shown while move mode is ON.
 
 ---
 
