@@ -42,6 +42,66 @@ namespace UnityVRMod.Features.VrVisualization
             }
         }
 
+        internal bool TryGetVrEyeMidpointWorld(out Vector3 midpointWorld)
+        {
+            midpointWorld = default;
+            return TryGetVrEyeCenterPoseWorld(out midpointWorld, out _);
+        }
+
+        internal bool TryGetVrEyeCenterPoseWorld(out Vector3 midpointWorld, out Quaternion centerRotationWorld)
+        {
+            midpointWorld = default;
+            centerRotationWorld = Quaternion.identity;
+
+            if (!IsVrReady || _cameraSetup == null)
+            {
+                return false;
+            }
+
+            bool autoSafeModeEngaged = Time.time < _autoSafeModeEndTime;
+            if (_isUserSafeModeActive || autoSafeModeEngaged)
+            {
+                return false;
+            }
+
+            VrCameraRig rig = _cameraSetup.GetVrCameraGameObjects();
+            Transform leftEye = rig.LeftEye != null ? rig.LeftEye.transform : null;
+            Transform rightEye = rig.RightEye != null ? rig.RightEye.transform : null;
+
+            if (leftEye != null && rightEye != null)
+            {
+                midpointWorld = (leftEye.position + rightEye.position) * 0.5f;
+                Vector3 forward = (leftEye.forward + rightEye.forward).normalized;
+                Vector3 up = (leftEye.up + rightEye.up).normalized;
+                if (forward.sqrMagnitude <= 0.0001f)
+                {
+                    forward = leftEye.forward.sqrMagnitude > 0.0001f ? leftEye.forward : rightEye.forward;
+                }
+                if (up.sqrMagnitude <= 0.0001f)
+                {
+                    up = leftEye.up.sqrMagnitude > 0.0001f ? leftEye.up : rightEye.up;
+                }
+                centerRotationWorld = Quaternion.LookRotation(forward, up);
+                return true;
+            }
+
+            if (leftEye != null)
+            {
+                midpointWorld = leftEye.position;
+                centerRotationWorld = leftEye.rotation;
+                return true;
+            }
+
+            if (rightEye != null)
+            {
+                midpointWorld = rightEye.position;
+                centerRotationWorld = rightEye.rotation;
+                return true;
+            }
+
+            return false;
+        }
+
         internal void Initialize()
         {
             if (_managerInitialized) return;

@@ -60,6 +60,10 @@ namespace UnityVRMod.Core
                 {
                     VrVisualizationFeature = new Features.VrVisualization.VrVisualizationManager();
                     VrVisualizationFeature.Initialize();
+#if MONO
+                    Features.VrVisualization.BeautifyRenderDiagnostics.EnsureInstalled();
+                    Features.VrVisualization.CameraTypesVrFollowPatch.EnsureInstalled();
+#endif
                 }
                 catch (Exception ex)
                 {

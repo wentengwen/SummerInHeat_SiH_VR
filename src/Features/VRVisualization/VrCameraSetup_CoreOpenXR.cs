@@ -1,5 +1,4 @@
 ﻿using System.Runtime.InteropServices;
-using UnityEngine.Experimental.Rendering;
 using System.Reflection;
 using UnityEngine.Rendering;
 using UnityVRMod.Config;
@@ -68,6 +67,7 @@ namespace UnityVRMod.Features.VrVisualization
         private string _cachedForceSolidClearScenesRaw = string.Empty;
         private const int VrRigRenderLayer = 31;
         private static readonly Color VrRigClearColor = new(0.4623f, 0.4623f, 0.4623f, 0f);
+        private static bool UseSingleSharedVrEyeCamera = true;
         private static bool EnableOpenXrPostFxSync = true;
         private const float OpenXrPerfLogIntervalSeconds = 1.0f;
 
@@ -151,6 +151,14 @@ namespace UnityVRMod.Features.VrVisualization
         private Transform _mainCameraLookAtTarget;
         private float _nextLookAtTargetResolveTime;
         private const float LookAtTargetResolveIntervalSeconds = 1.0f;
+        private const float SubCameraMoveModeToggleHoldSeconds = 0.45f;
+        private const float SubCameraRotateModeHoldSeconds = 0.30f;
+        private bool _isSubCameraMoveModeActive;
+        private float _subCameraMoveAHoldSeconds;
+        private bool _subCameraMoveAToggleHoldConsumed;
+        private bool _wasSubCameraAButtonPressed;
+        private bool _wasSubCameraBButtonPressed;
+        private float _subCameraMoveStickClickHoldSeconds;
 
         private struct OpenXrBooleanLogState
         {
@@ -186,7 +194,8 @@ namespace UnityVRMod.Features.VrVisualization
         {
             None,
             UiProjectionPlane,
-            DanmenProjectionPlane
+            DanmenProjectionPlane,
+            SubCameraProjectionPlane
         }
 
         private enum PlaneEditMode
@@ -598,7 +607,6 @@ namespace UnityVRMod.Features.VrVisualization
             OpenXRAPI.xrEnumerateSwapchainFormats(_xrSession, formatCount, out formatCount, formatsArray);
             _supportedSwapchainFormats.Clear();
             _supportedSwapchainFormats.AddRange(formatsArray);
-
             long DXGI_FORMAT_B8G8R8A8_UNORM_SRGB = 91;
             if (_supportedSwapchainFormats.Contains(DXGI_FORMAT_B8G8R8A8_UNORM_SRGB))
                 _selectedSwapchainFormat = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
@@ -837,8 +845,8 @@ namespace UnityVRMod.Features.VrVisualization
                 if (currentIntermediateRT != null) { currentIntermediateRT.Release(); UnityEngine.Object.Destroy(currentIntermediateRT); }
 
                 var renderTextureFormat = QualitySettings.activeColorSpace == ColorSpace.Linear
-                    ? GraphicsFormat.B8G8R8A8_SRGB
-                    : GraphicsFormat.B8G8R8A8_UNorm;
+                    ? UnityEngine.Experimental.Rendering.GraphicsFormat.B8G8R8A8_SRGB
+                    : UnityEngine.Experimental.Rendering.GraphicsFormat.B8G8R8A8_UNorm;
 
                 VRModCore.LogSpammyDebug($"Creating intermediate RenderTexture with format: {renderTextureFormat}");
                 currentIntermediateRT = new RenderTexture((int)viewConfig.recommendedImageRectWidth, (int)viewConfig.recommendedImageRectHeight, 24, renderTextureFormat);
@@ -928,9 +936,47 @@ namespace UnityVRMod.Features.VrVisualization
             bool isSmoothTurnHeld = IsBooleanActionPressed(activeThumbstickClickState);
             float activeGripValue = GetFloatActionValue(activeGripState);
             bool isGripHeld = activeGripValue >= GripHoldThreshold;
-            bool isTeleportAiming = UpdateTeleportAimStateFromStick(activeStickY);
             bool isUiTogglePressed = IsBooleanActionPressed(activeUiToggleState);
             bool teleportConfirmPressed = IsTriggerPressed(activeTriggerState);
+            float rightStickX = GetThumbstickX(_rightThumbstickAxisLogState);
+            float rightStickY = GetThumbstickY(_rightThumbstickAxisLogState);
+            bool rightStickClickPressed = IsBooleanActionPressed(_rightThumbstickClickLogState);
+            bool rightAPressed = IsBooleanActionPressed(_rightALogState);
+            bool rightBPressed = IsBooleanActionPressed(_rightBLogState);
+
+            UpdateSubCameraMoveModeState(
+                rightAPressed,
+                rightBPressed,
+                rightStickX,
+                rightStickY,
+                rightStickClickPressed,
+                out bool subCameraMoveModeActive,
+                out bool subCameraRotateModeActive,
+                out float subCameraMoveAxisX,
+                out float subCameraMoveAxisY,
+                out bool subCameraHeightUpStep,
+                out bool subCameraHeightDownStep);
+
+#if MONO
+            CameraTypesVrFollowPatch.SetSubCameraMoveInput(
+                subCameraMoveModeActive,
+                subCameraRotateModeActive,
+                subCameraMoveAxisX,
+                subCameraMoveAxisY,
+                subCameraHeightUpStep,
+                subCameraHeightDownStep);
+#endif
+
+            if (subCameraMoveModeActive)
+            {
+                activeStickX = 0f;
+                activeStickY = 0f;
+                isSmoothTurnHeld = false;
+                isUiTogglePressed = false;
+                teleportConfirmPressed = false;
+            }
+
+            bool isTeleportAiming = UpdateTeleportAimStateFromStick(activeStickY);
 
             bool hasGripLocalPose = false;
             Vector3 activeGripLocalPos = default;
@@ -1021,7 +1067,19 @@ namespace UnityVRMod.Features.VrVisualization
 
             _uiProjectionPlane.Update(currentMainCamera, uiToggleShortPress, hasPanelPose, panelWorldPos, panelWorldRot);
             bool uiTriggerPressed = !isPlaneEditTriggerConsumed && teleportConfirmPressed && !isTeleportAiming;
-            _uiInteractor.Update(_vrRig, hasPointerPose, pointerOriginWorld, pointerDirectionWorld, uiTriggerPressed);
+            bool hasRightDebugPose = hasRightAimWorldPose || hasRightHandWorldPose;
+            Vector3 rightDebugWorldPos = hasRightAimWorldPose ? rightAimWorldPos : rightHandWorldPos;
+            Quaternion rightDebugWorldRot = hasRightAimWorldPose ? rightAimWorldRot : rightHandWorldRot;
+            _uiInteractor.Update(
+                _vrRig,
+                hasPointerPose,
+                pointerOriginWorld,
+                pointerDirectionWorld,
+                uiTriggerPressed,
+                uiToggleShortPress,
+                hasRightDebugPose,
+                rightDebugWorldPos,
+                rightDebugWorldRot);
             bool uiTouchInteractionTriggered = _uiInteractor.UpdateUiRayTouch(_vrRig, hasActiveHandWorldPose, activeHandWorldPos, activeHandWorldRot, isGripHeld);
             if (uiTouchInteractionTriggered)
             {
@@ -1239,6 +1297,16 @@ namespace UnityVRMod.Features.VrVisualization
                 selectionTransform = danmenTransform;
             }
 
+            if (_uiInteractor.TryRaycastSubCameraResizeHandle(ray, out int subCameraHandleIndex, out float subCameraDistance) &&
+                _uiInteractor.TryGetSubCameraProjectionPlaneTransform(out Transform subCameraTransform) &&
+                subCameraDistance < hitDistance)
+            {
+                selection = PlaneEditSelection.SubCameraProjectionPlane;
+                handleIndex = subCameraHandleIndex;
+                hitDistance = subCameraDistance;
+                selectionTransform = subCameraTransform;
+            }
+
             return selection != PlaneEditSelection.None;
         }
 
@@ -1268,6 +1336,17 @@ namespace UnityVRMod.Features.VrVisualization
                 selectionTransform = danmenPlaneTransform;
                 hitPointWorld = danmenHitPoint;
                 bestDistance = danmenDistance;
+            }
+
+            if (_uiInteractor.TryGetSubCameraProjectionPlaneTransform(out Transform debugPlaneTransform) &&
+                TryRaycastPlaneQuad(ray, debugPlaneTransform, out float debugDistance, out Vector3 debugHitPoint, out _) &&
+                (!requireEdge || _uiInteractor.IsSubCameraProjectionMoveRingHit(debugHitPoint)) &&
+                debugDistance < bestDistance)
+            {
+                selection = PlaneEditSelection.SubCameraProjectionPlane;
+                selectionTransform = debugPlaneTransform;
+                hitPointWorld = debugHitPoint;
+                bestDistance = debugDistance;
             }
 
             return selection != PlaneEditSelection.None;
@@ -1313,6 +1392,8 @@ namespace UnityVRMod.Features.VrVisualization
                     return _uiProjectionPlane.TryGetPlaneTransform(out planeTransform);
                 case PlaneEditSelection.DanmenProjectionPlane:
                     return _danmenProjectionPlane.TryGetPlaneTransform(out planeTransform);
+                case PlaneEditSelection.SubCameraProjectionPlane:
+                    return _uiInteractor.TryGetSubCameraProjectionPlaneTransform(out planeTransform);
                 default:
                     return false;
             }
@@ -1328,6 +1409,9 @@ namespace UnityVRMod.Features.VrVisualization
                 case PlaneEditSelection.DanmenProjectionPlane:
                     _danmenProjectionPlane.SetManualPose(worldPosition, worldRotation);
                     break;
+                case PlaneEditSelection.SubCameraProjectionPlane:
+                    _uiInteractor.SetSubCameraProjectionManualPose(worldPosition, worldRotation);
+                    break;
             }
         }
 
@@ -1341,6 +1425,9 @@ namespace UnityVRMod.Features.VrVisualization
                     return true;
                 case PlaneEditSelection.DanmenProjectionPlane:
                     panelScale = _danmenProjectionPlane.GetPanelScale();
+                    return true;
+                case PlaneEditSelection.SubCameraProjectionPlane:
+                    panelScale = _uiInteractor.GetSubCameraProjectionPanelScale();
                     return true;
                 default:
                     return false;
@@ -1357,6 +1444,9 @@ namespace UnityVRMod.Features.VrVisualization
                 case PlaneEditSelection.DanmenProjectionPlane:
                     _danmenProjectionPlane.SetPanelScale(panelScale);
                     break;
+                case PlaneEditSelection.SubCameraProjectionPlane:
+                    _uiInteractor.SetSubCameraProjectionPanelScale(panelScale);
+                    break;
             }
         }
 
@@ -1364,6 +1454,8 @@ namespace UnityVRMod.Features.VrVisualization
         {
             _uiProjectionPlane.SetEdgeHighlight(highlightedSelection == PlaneEditSelection.UiProjectionPlane);
             _danmenProjectionPlane.SetEdgeHighlight(highlightedSelection == PlaneEditSelection.DanmenProjectionPlane);
+            _uiInteractor.SetSubCameraProjectionEdgeHighlight(highlightedSelection == PlaneEditSelection.SubCameraProjectionPlane);
+            _uiInteractor.SetSubCameraProjectionOutlineVisible(_isSubCameraMoveModeActive);
         }
 
         private void ClearActivePlaneEditState()
@@ -1739,6 +1831,70 @@ namespace UnityVRMod.Features.VrVisualization
             }
         }
 
+        private void UpdateSubCameraMoveModeState(
+            bool rightAPressed,
+            bool rightBPressed,
+            float rightStickX,
+            float rightStickY,
+            bool rightStickClickPressed,
+            out bool moveModeActive,
+            out bool rotateModeActive,
+            out float moveAxisX,
+            out float moveAxisY,
+            out bool heightUpStep,
+            out bool heightDownStep)
+        {
+            heightUpStep = false;
+            heightDownStep = false;
+
+            if (rightAPressed)
+            {
+                _subCameraMoveAHoldSeconds += Time.unscaledDeltaTime;
+                if (!_subCameraMoveAToggleHoldConsumed && _subCameraMoveAHoldSeconds >= SubCameraMoveModeToggleHoldSeconds)
+                {
+                    _isSubCameraMoveModeActive = !_isSubCameraMoveModeActive;
+                    _subCameraMoveAToggleHoldConsumed = true;
+                    VRModCore.Log($"[SubCamera][OpenXR] Move mode {(_isSubCameraMoveModeActive ? "ON" : "OFF")}.");
+                }
+            }
+            else
+            {
+                if (_wasSubCameraAButtonPressed &&
+                    _isSubCameraMoveModeActive &&
+                    !_subCameraMoveAToggleHoldConsumed)
+                {
+                    heightUpStep = true;
+                }
+
+                _subCameraMoveAHoldSeconds = 0f;
+                _subCameraMoveAToggleHoldConsumed = false;
+            }
+
+            if (_wasSubCameraBButtonPressed && !rightBPressed && _isSubCameraMoveModeActive)
+            {
+                heightDownStep = true;
+            }
+
+            if (rightStickClickPressed)
+            {
+                _subCameraMoveStickClickHoldSeconds += Time.unscaledDeltaTime;
+            }
+            else
+            {
+                _subCameraMoveStickClickHoldSeconds = 0f;
+            }
+
+            moveModeActive = _isSubCameraMoveModeActive;
+            rotateModeActive = moveModeActive &&
+                               rightStickClickPressed &&
+                               _subCameraMoveStickClickHoldSeconds >= SubCameraRotateModeHoldSeconds;
+            moveAxisX = moveModeActive ? rightStickX : 0f;
+            moveAxisY = moveModeActive ? rightStickY : 0f;
+
+            _wasSubCameraAButtonPressed = rightAPressed;
+            _wasSubCameraBButtonPressed = rightBPressed;
+        }
+
         private static bool IsBooleanActionPressed(OpenXrBooleanLogState state)
         {
             return state.HasSample && state.IsActive && state.IsPressed;
@@ -1833,6 +1989,8 @@ namespace UnityVRMod.Features.VrVisualization
                 VRModCore.LogError("SetupCameraRig FAILED: mainCamera is null.");
                 return;
             }
+
+            mainCamera.fieldOfView = 60f;
             VRModCore.LogRuntimeDebug($"SetupCameraRig for camera '{mainCamera.name}'.");
 
             if (_vrRig != null) TeardownCameraRig();
@@ -1882,15 +2040,27 @@ namespace UnityVRMod.Features.VrVisualization
             _currentAppliedRigScale = 1.0f / Mathf.Max(0.01f, ConfigManager.VrWorldScale.Value);
             _vrRig.transform.localScale = new Vector3(_currentAppliedRigScale, _currentAppliedRigScale, _currentAppliedRigScale);
 
-            _leftVrCameraGO = new GameObject("XrVrCamera_Left");
-            _leftVrCameraGO.transform.SetParent(_vrRig.transform, false);
-            _leftVrCamera = _leftVrCameraGO.AddComponent<Camera>();
-            ConfigureVrCamera(_leftVrCamera, mainCamera, "Left");
+            if (UseSingleSharedVrEyeCamera)
+            {
+                _leftVrCameraGO = new GameObject("XrVrCamera_Shared");
+                _leftVrCameraGO.transform.SetParent(_vrRig.transform, false);
+                _leftVrCamera = _leftVrCameraGO.AddComponent<Camera>();
+                _rightVrCameraGO = _leftVrCameraGO;
+                _rightVrCamera = _leftVrCamera;
+                ConfigureVrCamera(_leftVrCamera, mainCamera, "Shared");
+            }
+            else
+            {
+                _leftVrCameraGO = new GameObject("XrVrCamera_Left");
+                _leftVrCameraGO.transform.SetParent(_vrRig.transform, false);
+                _leftVrCamera = _leftVrCameraGO.AddComponent<Camera>();
+                ConfigureVrCamera(_leftVrCamera, mainCamera, "Left");
 
-            _rightVrCameraGO = new GameObject("XrVrCamera_Right");
-            _rightVrCameraGO.transform.SetParent(_vrRig.transform, false);
-            _rightVrCamera = _rightVrCameraGO.AddComponent<Camera>();
-            ConfigureVrCamera(_rightVrCamera, mainCamera, "Right");
+                _rightVrCameraGO = new GameObject("XrVrCamera_Right");
+                _rightVrCameraGO.transform.SetParent(_vrRig.transform, false);
+                _rightVrCamera = _rightVrCameraGO.AddComponent<Camera>();
+                ConfigureVrCamera(_rightVrCamera, mainCamera, "Right");
+            }
 
             bool useFallbackRenderState = ShouldUseFallbackRenderState();
             LogReferenceCameraDiagnostics(mainCamera, currentSceneName, useFallbackRenderState);
@@ -2464,8 +2634,12 @@ namespace UnityVRMod.Features.VrVisualization
                 return;
             }
 
+            bool sharedEyeCamera = ReferenceEquals(_leftVrCamera, _rightVrCamera);
+
             int leftMainCount = SyncSelectedPostProcessingForEye(mainCamera, _leftVrCamera, IsTargetMainEffectType, _leftVrCamera);
-            int rightMainCount = SyncSelectedPostProcessingForEye(mainCamera, _rightVrCamera, IsTargetMainEffectType, _rightVrCamera);
+            int rightMainCount = sharedEyeCamera
+                ? leftMainCount
+                : SyncSelectedPostProcessingForEye(mainCamera, _rightVrCamera, IsTargetMainEffectType, _rightVrCamera);
 
             Camera hdrSource = FindHdrEffectSourceCamera(mainCamera);
             int leftHdrCount = 0;
@@ -2473,10 +2647,17 @@ namespace UnityVRMod.Features.VrVisualization
             if (hdrSource != null)
             {
                 _leftVrHdrEffectCamera = CreateHdrEffectCameraForEye("XrVrCamera_Left_HdrEffects", _leftVrCameraGO?.transform, hdrSource, _leftVrCamera);
-                _rightVrHdrEffectCamera = CreateHdrEffectCameraForEye("XrVrCamera_Right_HdrEffects", _rightVrCameraGO?.transform, hdrSource, _rightVrCamera);
-
                 leftHdrCount = SyncSelectedPostProcessingForEye(hdrSource, _leftVrHdrEffectCamera, IsTargetHdrEffectType, _leftVrHdrEffectCamera);
-                rightHdrCount = SyncSelectedPostProcessingForEye(hdrSource, _rightVrHdrEffectCamera, IsTargetHdrEffectType, _rightVrHdrEffectCamera);
+                if (sharedEyeCamera)
+                {
+                    _rightVrHdrEffectCamera = _leftVrHdrEffectCamera;
+                    rightHdrCount = leftHdrCount;
+                }
+                else
+                {
+                    _rightVrHdrEffectCamera = CreateHdrEffectCameraForEye("XrVrCamera_Right_HdrEffects", _rightVrCameraGO?.transform, hdrSource, _rightVrCamera);
+                    rightHdrCount = SyncSelectedPostProcessingForEye(hdrSource, _rightVrHdrEffectCamera, IsTargetHdrEffectType, _rightVrHdrEffectCamera);
+                }
             }
             else
             {
@@ -3073,14 +3254,50 @@ namespace UnityVRMod.Features.VrVisualization
             if (_isUsing2dSyntheticFallbackCamera) return;
             if (mainCamera == null) return;
 
+            Vector3 followWorldPos = hmdWorldPos;
+            bool hasFollowWorldPos = hasHmdPose;
+            if (TryGetVrEyeMidpointWorld(out Vector3 vrEyeMidpoint))
+            {
+                followWorldPos = vrEyeMidpoint;
+                hasFollowWorldPos = true;
+            }
+
             if (_mainCameraLookAtTarget == null && Time.time >= _nextLookAtTargetResolveTime)
             {
                 _nextLookAtTargetResolveTime = Time.time + LookAtTargetResolveIntervalSeconds;
                 ResolveMainCameraLookAtTarget(mainCamera, force: true);
             }
 
-            if (_mainCameraLookAtTarget == null || !hasHmdPose) return;
-            _mainCameraLookAtTarget.position = hmdWorldPos;
+            if (_mainCameraLookAtTarget != null && hasFollowWorldPos)
+            {
+                _mainCameraLookAtTarget.position = followWorldPos;
+            }
+
+        }
+
+        private bool TryGetVrEyeMidpointWorld(out Vector3 midpointWorld)
+        {
+            midpointWorld = default;
+
+            if (_leftVrCamera != null && _rightVrCamera != null)
+            {
+                midpointWorld = (_leftVrCamera.transform.position + _rightVrCamera.transform.position) * 0.5f;
+                return true;
+            }
+
+            if (_leftVrCamera != null)
+            {
+                midpointWorld = _leftVrCamera.transform.position;
+                return true;
+            }
+
+            if (_rightVrCamera != null)
+            {
+                midpointWorld = _rightVrCamera.transform.position;
+                return true;
+            }
+
+            return false;
         }
 
         private void ResolveMainCameraLookAtTarget(Camera mainCamera, bool force)
@@ -3149,6 +3366,15 @@ namespace UnityVRMod.Features.VrVisualization
             _activePlaneEditResizeStartHandDistance = 0f;
             _activePlaneEditResizeStartScale = 1f;
             _isTeleportAimingByStick = false;
+            _isSubCameraMoveModeActive = false;
+            _subCameraMoveAHoldSeconds = 0f;
+            _subCameraMoveAToggleHoldConsumed = false;
+            _wasSubCameraAButtonPressed = false;
+            _wasSubCameraBButtonPressed = false;
+            _subCameraMoveStickClickHoldSeconds = 0f;
+#if MONO
+            CameraTypesVrFollowPatch.ResetSubCameraMoveInput();
+#endif
             SetPlaneEditEdgeHighlight(PlaneEditSelection.None);
         }
 
