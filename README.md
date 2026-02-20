@@ -69,7 +69,6 @@
 
 *   **Hardware Compatibility**: Optimized for Quest 3. Compatibility for other HMDs is being evaluated.
 *   **ADV Scene**: Currently displayed as a 2D projection. Visual effects in VR may differ from the PC version and will be addressed in future updates.
-*   **Sub-Camera Panels**: Added an OpenXR projected panel for Sub-Camera RenderTexture outputs (camera/texture name containing `SubCamera`/`SubCam`). This is currently experimental.
 *   **UI Integration**: Certain dialog icons currently require interaction via the main UI panel rather than direct clicking.
 *   **Performance Note**: High graphics settings and effects significantly impact VR frame rates; adjust carefully for stability.
 
