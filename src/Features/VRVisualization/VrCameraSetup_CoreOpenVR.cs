@@ -174,6 +174,8 @@ namespace UnityVRMod.Features.VrVisualization
                 VRModCore.LogError("SetupCameraRig FAILED: mainCamera is null.");
                 return;
             }
+
+            mainCamera.fieldOfView = 60f;
             VRModCore.LogRuntimeDebug($"SetupCameraRig for camera '{mainCamera.name}'.");
 
             if (_vrRig != null) TeardownCameraRig();

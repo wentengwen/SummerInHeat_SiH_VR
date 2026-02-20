@@ -161,6 +161,10 @@
 		<HintPath>..\lib\mono\BepInEx\BepInEx.Unity.Mono.dll</HintPath>
 		<Private>False</Private>
 	</Reference>
+	<Reference Include="0Harmony">
+		<HintPath>..\..\game\GameData\BepInEx\core\0Harmony.dll</HintPath>
+		<Private>False</Private>
+	</Reference>
 	<Reference Include="UnityEngine">
 		<HintPath>..\lib\mono\UnityEngine.dll</HintPath>
 		<Private>False</Private>

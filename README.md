@@ -39,16 +39,26 @@
 
 ## 🎮 Controls (Oculus/Meta Touch)
 
+> [!TIP]
+> `OpenXR Control Hand` can switch the primary control hand between **Right** and **Left**.
+
 | Action | VR Controller Input |
 | :--- | :--- |
-| **Teleport Aim** | **Right Stick** (Up) |
-| **Confirm Teleport** | **Right Trigger** |
-| **Snap Turning** | **Right Stick** (Left/Right) |
-| **Smooth Turning** | **Right Stick Click (Hold)** + Move Left/Right |
-| **Move Viewport** | **Hold Grip** & Drag Hand |
-| **Toggle UI Panel** | **Button B** (Right) |
-| **Click/Select UI** | **Right Trigger** |
-| **Resize & Move UI Panel** | **Right Trigger** (on boundary) & Drag |
+| **Teleport Aim** | **Primary Hand Stick** (Up) |
+| **Confirm Teleport** | **Primary Hand Trigger** |
+| **Snap Turning** | **Primary Hand Stick** (Left/Right) |
+| **Smooth Turning** | **Primary Hand Stick Click (Hold)** + Move Left/Right |
+| **Move Viewport** | **Hold Primary Hand Grip** & Drag Hand |
+| **Toggle UI Panel** | **Button B (Right Hand)** / **Button Y (Left Hand)** |
+| **Click/Select UI** | **Primary Hand Trigger** |
+| **Resize & Move UI Panel** | **Primary Hand Trigger** (on boundary) & Drag |
+| **Petting Interact** | **Touch target with Primary Hand controller** + **Primary Hand Grip** |
+
+### Petting Interaction
+
+1. Move your primary hand controller close to the target body point.
+2. When a valid target is detected, an interaction icon appears on the controller.
+3. Press **Primary Hand Grip** to trigger the interaction logic.
 
 ---
 
@@ -58,10 +68,7 @@
 > This mod is under active development. Below are the current known limitations and planned updates:
 
 *   **Hardware Compatibility**: Optimized for Quest 3. Compatibility for other HMDs is being evaluated.
-*   **Character Customization Scene**: This scene is currently not supported in VR.
 *   **ADV Scene**: Currently displayed as a 2D projection. Visual effects in VR may differ from the PC version and will be addressed in future updates.
-*   **Petting Mechanics**: Animations play correctly, but direct 3D interaction is not yet supported in VR.
-*   **Sub-Camera Panels**: Sub-Camera Panels within scenes are not yet projected into the VR view.
 *   **UI Integration**: Certain dialog icons currently require interaction via the main UI panel rather than direct clicking.
 *   **Performance Note**: High graphics settings and effects significantly impact VR frame rates; adjust carefully for stability.
 

@@ -3,12 +3,6 @@
 
 #include <d3d11.h>
 #include <d3d11_1.h>
-#include <fstream>
-#include <string>
-#include <chrono>
-#include <iomanip>
-#include <sstream>
-#include <windows.h>
 
 #include "IUnityInterface.h"
 #include "IUnityGraphics.h"
@@ -90,12 +84,12 @@ extern "C" __declspec(dllexport) void DirectCopyResource(void* pDest, void* pSrc
 
 extern "C" __declspec(dllexport) HRESULT CreateAndRegisterSRV(void* pTextureResource, int srvFormatDXGI, void** ppSRV)
 {
-    if (!g_D3D11Device || !pTextureResource) 
+    if (!g_D3D11Device || !pTextureResource)
     {
         if (ppSRV) *ppSRV = nullptr;
         return E_FAIL;
     }
-    
+
     ID3D11Texture2D* pTexture2D = static_cast<ID3D11Texture2D*>(pTextureResource);
     D3D11_TEXTURE2D_DESC texDesc;
     pTexture2D->GetDesc(&texDesc);
@@ -109,11 +103,11 @@ extern "C" __declspec(dllexport) HRESULT CreateAndRegisterSRV(void* pTextureReso
     ID3D11ShaderResourceView* pNewSRV = nullptr;
     HRESULT hr = g_D3D11Device->CreateShaderResourceView(pTexture2D, &srvDesc, &pNewSRV);
 
-    if (SUCCEEDED(hr)) 
+    if (SUCCEEDED(hr))
     {
         if (ppSRV) *ppSRV = pNewSRV;
-    } 
-    else 
+    }
+    else
     {
         if (ppSRV) *ppSRV = nullptr;
     }
